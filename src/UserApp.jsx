@@ -54,19 +54,14 @@ export default function UserApp() {
 
   const cartTotal = cart.reduce((total, item) => total + (item.price + (item.addons ? item.addons.reduce((s, a) => s + a.price, 0) : 0)) * item.quantity, 0);
 
-  // ==========================================
-  // UPDATED AUTH LOGIC (Mid-Strong Password & Premium Alerts)
-  // ==========================================
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
 
-    // 1. Phone Validation (must be exactly 10 digits)
     if (authForm.phone.length !== 10) {
       alert("Please enter a valid 10-digit phone number.");
       return;
     }
 
-    // 2. Mid-Strong Password Validation (Min 6 chars, at least 1 letter, 1 number)
     const pwdRegex = /^(?=.*[A-Za-z])(?=.*\d).{6,}$/;
     if (authMode === 'signup' && !pwdRegex.test(authForm.password)) {
       alert("Please create a stronger password (minimum 6 characters, including both letters and numbers).");
@@ -79,7 +74,6 @@ export default function UserApp() {
         return;
       }
       
-      // 3. CHECK DUPLICATE PHONE
       get(ref(db, 'users')).then(snap => {
         let exists = false;
         if (snap.exists()) {
@@ -88,9 +82,8 @@ export default function UserApp() {
         }
         
         if (exists) {
-           // PREMIUM DUPLICATE MESSAGE
            alert("Welcome back! This number is already registered. Please log in to continue.");
-           setAuthMode('login'); // Automatically switch to login
+           setAuthMode('login'); 
         } else {
            const newUser = { name: authForm.name, phone: authForm.phone, password: authForm.password, createdAt: new Date().toISOString() };
            push(ref(db, 'users'), newUser).then((newRef) => {
@@ -102,7 +95,6 @@ export default function UserApp() {
       });
 
     } else {
-      // Login Logic
       get(ref(db, 'users')).then(snap => {
         if(snap.exists()) {
           const users = Object.entries(snap.val()).map(([key, val]) => ({...val, id: key}));
@@ -116,11 +108,9 @@ export default function UserApp() {
               alert("Incorrect Password! Please try again.");
             }
           } else {
-            // SILENT SHIFT: Number not found, shift to signup smoothly
             setAuthMode('signup');
           }
         } else {
-          // SILENT SHIFT: Database is empty
           setAuthMode('signup');
         }
       });
@@ -176,7 +166,7 @@ export default function UserApp() {
       <nav className="sticky top-0 z-40 w-full bg-white/90 backdrop-blur-md border-b border-zinc-100 px-4 sm:px-6 py-3 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 sm:space-x-3 cursor-pointer" onClick={() => {setCurrentView('home'); window.scrollTo(0,0);}}>
-            {contactDetails.logo && <img src={contactDetails.logo} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-orange-100 object-cover shadow-sm" alt="logo" />}
+            {contactDetails.logo && <img src={contactDetails.logo} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-orange-100 object-cover shadow-sm" alt="logo" onError={(e) => e.target.src = '/logo.png'}/>}
             <div className="flex flex-col">
               <span className="text-sm sm:text-xl font-black text-zinc-900 leading-none">Dadi Maa Ke</span>
               <span className="text-[10px] sm:text-xs font-bold text-orange-600 uppercase tracking-widest">Parathe</span>
@@ -235,7 +225,7 @@ export default function UserApp() {
                 </button>
               </div>
               <div className="relative group">
-                <img src={contactDetails.logo} className="w-56 h-56 sm:w-72 sm:h-72 rounded-full border-[10px] border-white shadow-2xl object-cover group-hover:rotate-6 group-hover:scale-105 transition-all duration-700 relative z-10" alt="Dadi Maa Ke Parathe" />
+                <img src={contactDetails.logo} className="w-56 h-56 sm:w-72 sm:h-72 rounded-full border-[10px] border-white shadow-2xl object-cover group-hover:rotate-6 group-hover:scale-105 transition-all duration-700 relative z-10" alt="Dadi Maa Ke Parathe" onError={(e) => e.target.src = '/logo.png'}/>
                 <div className="absolute -bottom-4 -right-4 sm:-bottom-6 sm:-right-6 bg-white p-3 sm:p-4 rounded-3xl shadow-xl flex items-center gap-3 border border-orange-50 z-20 animate-bounce">
                   <div className="bg-orange-100 p-2 rounded-full"><Heart className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 fill-orange-600"/></div>
                   <div className="text-left"><div className="text-[10px] sm:text-xs text-zinc-500 font-bold uppercase tracking-widest">Made with</div><div className="font-black text-sm sm:text-base text-zinc-900">100% Love</div></div>
@@ -280,8 +270,9 @@ export default function UserApp() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
               {menuItems.filter(i => selectedCategory === "All" || i.category === selectedCategory).map(item => (
                 <div key={item.id} className={`bg-white rounded-[2rem] overflow-hidden border border-zinc-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 group flex flex-col ${!item.inStock && 'opacity-60'}`}>
-                  <div className="relative overflow-hidden p-2">
-                    <img src={item.image || '/logo.png'} className={`w-full h-48 sm:h-56 object-cover rounded-3xl group-hover:scale-105 transition-transform duration-700 ${!item.inStock && 'grayscale'}`} alt=""/>
+                  <div className="relative overflow-hidden p-2 bg-zinc-50">
+                    {/* ADDED onError FALLBACK HERE */}
+                    <img src={item.image || '/logo.png'} className={`w-full h-48 sm:h-56 object-cover rounded-3xl group-hover:scale-105 transition-transform duration-700 ${!item.inStock && 'grayscale'}`} alt="" onError={(e) => { e.target.src = '/logo.png'; }}/>
                     {!item.inStock && <div className="absolute inset-0 flex items-center justify-center"><span className="bg-red-600 text-white font-black px-4 py-2 rounded-xl uppercase tracking-widest text-xs shadow-xl backdrop-blur-sm bg-opacity-90">Out of Stock</span></div>}
                   </div>
                   <div className="p-5 sm:p-6 flex flex-col flex-grow">
@@ -419,7 +410,7 @@ export default function UserApp() {
           
           <div className="space-y-6">
             <div className="flex items-center space-x-3 cursor-pointer" onClick={() => {setCurrentView('home'); window.scrollTo(0,0);}}>
-              {contactDetails.logo && <img src={contactDetails.logo} className="w-14 h-14 rounded-full border-2 border-zinc-800" alt="logo" />}
+              {contactDetails.logo && <img src={contactDetails.logo} className="w-14 h-14 rounded-full border-2 border-zinc-800" alt="logo" onError={(e) => e.target.src = '/logo.png'}/>}
               <div>
                 <span className="text-2xl font-black text-white leading-none block">Dadi Maa Ke</span>
                 <span className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">Parathe</span>
@@ -481,13 +472,13 @@ export default function UserApp() {
         <div className="max-w-6xl mx-auto mt-16 pt-8 border-t border-zinc-800/50 text-xs text-center sm:text-left flex flex-col sm:flex-row justify-between items-center gap-6">
           <p className="font-medium text-zinc-500">© {new Date().getFullYear()} Dadi Maa Ke Parathe. All rights reserved.</p>
           <a href="https://instagram.com/axiomdesignsco" target="_blank" rel="noopener noreferrer" className="bg-zinc-900/50 px-5 py-2.5 rounded-full border border-zinc-800 font-medium hover:border-zinc-700 hover:bg-zinc-900 transition-all cursor-pointer">
-            Designed with <Heart className="w-3 h-3 inline text-rose-500 fill-rose-500 mx-1 animate-pulse"/> by <span className="font-bold text-white tracking-widest uppercase text-[10px]">Hardik Solanki</span>
+            Designed with <Heart className="w-3 h-3 inline text-rose-500 fill-rose-500 mx-1 animate-pulse"/> by <span className="font-bold text-white tracking-widest uppercase text-[10px]">Axiom Designs Co.</span>
           </a>
         </div>
       </footer>
 
       {/* ---------------- MODALS & DRAWERS ---------------- */}
-      {/* Auth Modal with Smart Signup Logic */}
+      {/* Auth Modal */}
       {showAuthModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-zinc-900/80 backdrop-blur-sm" onClick={() => setShowAuthModal(false)}></div>
@@ -511,7 +502,6 @@ export default function UserApp() {
                 />
               )}
               
-              {/* Phone Field - Only accepts Numbers */}
               <input 
                 type="tel"
                 placeholder="Phone Number (10 digits)" 
@@ -531,7 +521,6 @@ export default function UserApp() {
                 className="w-full bg-zinc-50 border border-zinc-200 p-4 rounded-2xl outline-none focus:border-orange-500 focus:bg-white transition-colors font-medium text-zinc-900 tracking-wider" 
                 onChange={e => setAuthForm({...authForm, password: e.target.value})} 
               />
-              {/* Password Hint */}
               {authMode === 'signup' && <p className="text-[10px] text-zinc-400 font-medium px-2 mt-1">Min 6 characters, combining letters & numbers.</p>}
               
               <button type="submit" className="w-full bg-orange-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-orange-500 shadow-xl shadow-orange-600/20 active:scale-95 transition-all mt-4">
@@ -539,7 +528,6 @@ export default function UserApp() {
               </button>
             </form>
             
-            {/* Manual Switcher Button */}
             <button onClick={() => setAuthMode(authMode==='login'?'signup':'login')} className="w-full text-center mt-8 text-zinc-500 text-sm font-medium hover:text-zinc-900 transition-colors">
               {authMode==='login' ? 'Don\'t have an account? ' : 'Already have an account? '}<span className="text-orange-600 font-bold underline decoration-orange-200 underline-offset-4">Click Here</span>
             </button>
