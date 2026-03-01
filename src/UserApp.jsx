@@ -95,7 +95,7 @@ export default function UserApp() {
           {contactDetails.logo && <img src={contactDetails.logo} className="w-10 h-10 rounded-full border-2 border-orange-100 object-cover" alt="logo" />}
           <div className="flex flex-col"><span className="text-xl font-bold text-zinc-900 leading-none">Dadi Maa Ke</span><span className="text-xs font-bold text-orange-600 tracking-widest uppercase">Parathe</span></div>
         </div>
-        <div className="hidden md:flex space-x-8">
+        <div className="flex space-x-4 md:space-x-8 overflow-x-auto scrollbar-hide py-2 md:py-0 w-full md:w-auto">
           {['Menu', 'Meal Pass', 'About'].map(v => <button key={v} onClick={() => setCurrentView(v.toLowerCase().replace(' ', ''))} className={`text-sm font-bold ${currentView === v.toLowerCase().replace(' ', '') ? 'text-orange-600' : 'text-zinc-500 hover:text-orange-600'}`}>{v}</button>)}
         </div>
         <div className="flex items-center space-x-4">
@@ -257,4 +257,5 @@ export default function UserApp() {
       )}
     </div>
   );
+
 }
