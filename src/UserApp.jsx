@@ -104,38 +104,44 @@ export default function UserApp() {
   const instaHandle = contactDetails.instagram ? contactDetails.instagram.replace('@', '') : '';
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] font-sans flex flex-col selection:bg-orange-100">
+    <div className="min-h-screen bg-[#FAFAFA] font-sans antialiased text-zinc-800 flex flex-col selection:bg-orange-200 selection:text-orange-900 overflow-x-hidden">
       
-      {/* ---------------- NAVBAR ---------------- */}
-      <nav className="sticky top-0 z-40 w-full bg-white/90 backdrop-blur-md border-b border-zinc-100 px-4 sm:px-6 py-3 shadow-sm transition-all duration-300">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2 sm:space-x-3 cursor-pointer" onClick={() => {setCurrentView('home'); window.scrollTo({ top: 0, behavior: 'smooth' });}}>
-            {contactDetails.logo && <img src={contactDetails.logo} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-orange-100 object-cover shadow-sm" alt="logo" onError={(e) => e.target.src = '/logo.png'}/>}
+      {/* ---------------- ULTRA-SMOOTH NAVBAR ---------------- */}
+      <nav className="sticky top-0 z-40 w-full bg-white/70 backdrop-blur-xl border-b border-zinc-200/50 px-4 py-3 sm:px-6 transition-all duration-300">
+        <div className="flex items-center justify-between max-w-7xl mx-auto">
+          <div className="flex items-center space-x-3 cursor-pointer group" onClick={() => {setCurrentView('home'); window.scrollTo({ top: 0, behavior: 'smooth' });}}>
+            <div className="relative overflow-hidden rounded-full shadow-sm group-hover:shadow-md transition-all duration-300">
+              <img src={contactDetails.logo || '/logo.png'} className="w-9 h-9 sm:w-10 sm:h-10 object-cover transform group-hover:scale-110 transition-transform duration-500" alt="logo" onError={(e) => e.target.src = '/logo.png'}/>
+            </div>
             <div className="flex flex-col">
-              <span className="text-sm sm:text-xl font-bold text-zinc-900 leading-none">Dadi Maa Ke</span>
-              <span className="text-[10px] sm:text-xs font-bold text-orange-600 uppercase tracking-widest">Parathe</span>
+              <span className="text-[15px] sm:text-base font-extrabold leading-none tracking-tight text-zinc-900 group-hover:text-orange-600 transition-colors duration-300">Dadi Maa Ke</span>
+              <span className="text-[10px] sm:text-[11px] font-bold text-orange-500 uppercase tracking-widest mt-0.5">Parathe</span>
             </div>
           </div>
-          <div className="hidden sm:flex absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 space-x-8 bg-zinc-100/50 px-6 py-2 rounded-full border border-zinc-200">
+          
+          <div className="hidden sm:flex space-x-1 bg-zinc-100/50 p-1 rounded-full border border-zinc-200/50 backdrop-blur-md">
             {['Home', 'Menu', 'Meal Pass', 'About'].map(v => (
-              <button key={v} onClick={() => {setCurrentView(v.toLowerCase().replace(' ', '')); window.scrollTo({ top: 0, behavior: 'smooth' });}} className={`text-sm font-bold transition-all duration-300 hover:-translate-y-0.5 ${currentView === v.toLowerCase().replace(' ', '') ? 'text-orange-600' : 'text-zinc-500 hover:text-orange-600'}`}>{v}</button>
+              <button key={v} onClick={() => {setCurrentView(v.toLowerCase().replace(' ', '')); window.scrollTo({ top: 0, behavior: 'smooth' });}} className={`px-5 py-2 rounded-full text-sm font-semibold transition-all duration-300 ${currentView === v.toLowerCase().replace(' ', '') ? 'bg-white text-orange-600 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200/50'}`}>{v}</button>
             ))}
           </div>
+
           <div className="flex items-center space-x-3 sm:space-x-4">
             {currentUser ? 
-              <button onClick={() => setCurrentUser(null)} className="text-rose-500 bg-rose-50 p-2 rounded-full hover:bg-rose-100 transition-colors duration-300"><LogOut className="w-4 h-4 sm:w-5 sm:h-5"/></button> 
+              <button onClick={() => setCurrentUser(null)} className="text-zinc-400 hover:text-rose-500 hover:bg-rose-50 p-2.5 rounded-full transition-all duration-300"><LogOut className="w-5 h-5"/></button> 
               : 
-              <button onClick={() => setShowAuthModal(true)} className="text-xs sm:text-sm font-bold bg-zinc-900 text-white px-5 py-2.5 rounded-full hover:bg-zinc-800 shadow-lg active:scale-95 transition-all duration-300">Login</button>
+              <button onClick={() => setShowAuthModal(true)} className="bg-zinc-900 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-md shadow-zinc-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">Login</button>
             }
-            <button onClick={() => setIsCartOpen(true)} className="relative p-2 sm:p-2.5 bg-zinc-100 rounded-full hover:bg-zinc-200 transition-colors duration-300 shadow-sm">
-              <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-900"/>
-              {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-orange-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold border-2 border-white shadow-sm">{cart.length}</span>}
+            <button onClick={() => setIsCartOpen(true)} className="relative p-2.5 bg-zinc-100/80 rounded-full hover:bg-zinc-200 transition-all duration-300 hover:shadow-inner group">
+              <ShoppingBag className="w-5 h-5 text-zinc-700 group-hover:text-orange-600 transition-colors duration-300"/>
+              {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-gradient-to-tr from-orange-600 to-orange-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-md ring-2 ring-white animate-in zoom-in">{cart.length}</span>}
             </button>
           </div>
         </div>
-        <div className="flex sm:hidden space-x-6 overflow-x-auto scrollbar-hide pt-3 mt-3 border-t border-zinc-100 px-2">
+        
+        {/* Mobile Nav Scroll */}
+        <div className="flex sm:hidden space-x-2 overflow-x-auto scrollbar-hide pt-4 pb-1 border-t border-zinc-100 mt-2">
           {['Home', 'Menu', 'Meal Pass', 'About'].map(v => (
-            <button key={v} onClick={() => {setCurrentView(v.toLowerCase().replace(' ', '')); window.scrollTo({ top: 0, behavior: 'smooth' });}} className={`text-xs font-bold whitespace-nowrap pb-1 transition-all duration-300 ${currentView === v.toLowerCase().replace(' ', '') ? 'text-orange-600 border-b-2 border-orange-600' : 'text-zinc-400'}`}>{v}</button>
+            <button key={v} onClick={() => {setCurrentView(v.toLowerCase().replace(' ', '')); window.scrollTo({ top: 0, behavior: 'smooth' });}} className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 ${currentView === v.toLowerCase().replace(' ', '') ? 'bg-orange-50 text-orange-600 border border-orange-100' : 'text-zinc-500 border border-transparent'}`}>{v}</button>
           ))}
         </div>
       </nav>
@@ -143,55 +149,53 @@ export default function UserApp() {
       {/* ---------------- MAIN CONTENT ---------------- */}
       <main className="flex-grow">
         
-        {/* EXACT ORIGINAL HOME VIEW */}
+        {/* HERO VIEW */}
         {currentView === 'home' && (
           <>
             <div className="flex flex-col items-center pt-16 sm:pt-28 pb-12 sm:pb-20 text-center px-6 animate-in fade-in duration-700 relative overflow-hidden">
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] h-[30rem] bg-orange-500/10 rounded-full blur-3xl -z-10"></div>
-              <div className="inline-flex items-center space-x-2 bg-orange-50 text-orange-700 px-4 py-1.5 rounded-full text-xs font-bold mb-6 border border-orange-100 shadow-sm">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] h-[30rem] bg-orange-500/10 rounded-full blur-3xl -z-10 animate-pulse" style={{ animationDuration: '4s' }}></div>
+              <div className="inline-flex items-center space-x-2 bg-orange-50 text-orange-700 px-4 py-1.5 rounded-full text-xs font-bold mb-6 border border-orange-100 shadow-sm hover:shadow-md transition-shadow">
                 <Flame className="w-3 h-3 fill-orange-600" />
                 <span className="uppercase tracking-widest">100% Authentic Recipe</span>
               </div>
               <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold mb-6 text-zinc-900 leading-tight tracking-tight">
                 Milega esa swad,<br/>
-                <span className="text-orange-600 bg-clip-text">Na aayegi ghar ki yaad.</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-rose-500">Na aayegi ghar ki yaad.</span>
               </h1>
               <p className="text-zinc-500 text-base sm:text-xl max-w-2xl mx-auto mb-10 font-medium leading-relaxed">
                 Hand-rolled, whole-wheat parathas crafted with love, pure desi ghee, and grandmother's secret spices. Delivered hot & fresh in Indore.
               </p>
               <div className="flex flex-col sm:flex-row items-center gap-4 mb-16 w-full sm:w-auto">
-                <button onClick={() => {setCurrentView('menu'); window.scrollTo({ top: 0, behavior: 'smooth' });}} className="w-full sm:w-auto px-8 py-4 bg-orange-600 text-white rounded-full font-bold flex items-center justify-center space-x-2 shadow-xl shadow-orange-900/20 hover:bg-orange-500 hover:-translate-y-1 transition-all duration-300 text-lg">
+                <button onClick={() => {setCurrentView('menu'); window.scrollTo({ top: 0, behavior: 'smooth' });}} className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-full font-bold flex items-center justify-center space-x-2 shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:-translate-y-1 transition-all duration-300 text-lg">
                   <span>Order Online</span><ArrowRight className="w-5 h-5"/>
                 </button>
-                <button onClick={() => {setCurrentView('mealpass'); window.scrollTo({ top: 0, behavior: 'smooth' });}} className="w-full sm:w-auto px-8 py-4 bg-white text-zinc-900 border-2 border-zinc-200 rounded-full font-bold flex items-center justify-center space-x-2 hover:border-zinc-900 hover:bg-zinc-50 transition-all duration-300 text-lg shadow-sm">
+                <button onClick={() => {setCurrentView('mealpass'); window.scrollTo({ top: 0, behavior: 'smooth' });}} className="w-full sm:w-auto px-8 py-4 bg-white/80 backdrop-blur-md text-zinc-900 border border-zinc-200/80 rounded-full font-bold flex items-center justify-center space-x-2 hover:bg-zinc-50 hover:-translate-y-1 hover:shadow-md transition-all duration-300 text-lg">
                   <ShieldCheck className="w-5 h-5 text-orange-500"/>
                   <span>View Meal Passes</span>
                 </button>
               </div>
               
-              {/* ✅ ROTATING LOGO WITH SMOOTHNESS */}
               <div className="relative group">
                 <img src={contactDetails.logo || '/logo.png'} className="w-56 h-56 sm:w-72 sm:h-72 rounded-full border-[10px] border-white shadow-2xl object-cover group-hover:scale-105 group-hover:rotate-6 transition-transform duration-1000 ease-in-out relative z-10" alt="Dadi Maa Ke Parathe" onError={(e) => e.target.src = '/logo.png'}/>
-                <div className="absolute -bottom-4 -right-4 sm:-bottom-6 sm:-right-6 bg-white p-3 sm:p-4 rounded-3xl shadow-xl flex items-center gap-3 border border-orange-50 z-20 animate-bounce">
+                <div className="absolute -bottom-4 -right-4 sm:-bottom-6 sm:-right-6 bg-white p-3 sm:p-4 rounded-3xl shadow-xl flex items-center gap-3 border border-orange-50 z-20 animate-bounce transition-all duration-1000 group-hover:shadow-rose-500/10">
                   <div className="bg-orange-100 p-2 rounded-full"><Heart className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 fill-orange-600"/></div>
                   <div className="text-left"><div className="text-[10px] sm:text-xs text-zinc-500 font-bold uppercase tracking-widest">Made with</div><div className="font-black text-sm sm:text-base text-zinc-900">100% Love</div></div>
                 </div>
               </div>
             </div>
 
-            {/* EXACT ORIGINAL 3 CARDS */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-5xl mx-auto px-6 pb-20 animate-in slide-in-from-bottom duration-700 delay-200">
-              <div className="bg-white p-8 rounded-[2rem] border border-zinc-100 text-center hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 cursor-default">
+              <div className="bg-white p-8 rounded-[2rem] border border-zinc-100 text-center hover:shadow-2xl hover:shadow-orange-500/10 hover:-translate-y-2 transition-all duration-500 cursor-default">
                  <div className="bg-orange-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Utensils className="w-8 h-8 text-orange-600" /></div>
                  <h4 className="font-bold text-xl mb-2 text-zinc-900">Pure Ingredients</h4>
                  <p className="text-sm text-zinc-500 font-medium">Made with 100% whole wheat and rich desi ghee for a healthy stomach.</p>
               </div>
-              <div className="bg-white p-8 rounded-[2rem] border border-zinc-100 text-center hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 cursor-default">
+              <div className="bg-white p-8 rounded-[2rem] border border-zinc-100 text-center hover:shadow-2xl hover:shadow-rose-500/10 hover:-translate-y-2 transition-all duration-500 cursor-default">
                  <div className="bg-rose-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Heart className="w-8 h-8 text-rose-500 fill-rose-100" /></div>
                  <h4 className="font-bold text-xl mb-2 text-zinc-900">Ghar Ka Swad</h4>
                  <p className="text-sm text-zinc-500 font-medium">Authentic recipes and spice blends passed down from generations.</p>
               </div>
-              <div className="bg-white p-8 rounded-[2rem] border border-zinc-100 text-center hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 cursor-default">
+              <div className="bg-white p-8 rounded-[2rem] border border-zinc-100 text-center hover:shadow-2xl hover:shadow-green-500/10 hover:-translate-y-2 transition-all duration-500 cursor-default">
                  <div className="bg-green-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Flame className="w-8 h-8 text-green-600 fill-green-100" /></div>
                  <h4 className="font-bold text-xl mb-2 text-zinc-900">Hot & Fresh</h4>
                  <p className="text-sm text-zinc-500 font-medium">Every paratha is made to order and delivered piping hot to your door.</p>
@@ -200,36 +204,68 @@ export default function UserApp() {
           </>
         )}
 
-        {/* EXACT ORIGINAL MENU VIEW */}
+        {/* 🚀 APPLE-LEVEL MENU CATEGORY VIEW */}
         {currentView === 'menu' && (
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12 animate-in fade-in">
-            <div className="flex flex-col md:flex-row justify-between mb-10 gap-6 items-start md:items-center">
-              <div>
-                <h2 className="text-3xl sm:text-4xl font-extrabold text-zinc-900">Our Menu</h2>
-                <p className="text-zinc-500 font-medium mt-1">Freshly prepared, just for you.</p>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
+            <div className="flex flex-col md:flex-row justify-between mb-8 gap-6 items-start md:items-end">
+              <div className="shrink-0">
+                <h2 className="text-4xl font-extrabold text-zinc-900 tracking-tight">Our Menu</h2>
+                <p className="text-zinc-500 font-medium text-sm sm:text-base mt-2">Freshly prepared, just for you.</p>
               </div>
-              <div className="flex space-x-3 overflow-x-auto pb-2 scrollbar-hide w-full md:w-auto p-1 bg-zinc-100 rounded-full">
-                <button onClick={() => setSelectedCategory("All")} className={`px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 ${selectedCategory === "All" ? 'bg-white text-orange-600 shadow-md' : 'text-zinc-500 hover:text-zinc-900'}`}>All</button>
-                {(categories || []).map(c => <button key={c.id} onClick={() => setSelectedCategory(c.name)} className={`px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 ${selectedCategory === c.name ? 'bg-white text-orange-600 shadow-md' : 'text-zinc-500 hover:text-zinc-900'}`}>{c.name}</button>)}
+              
+              {/* ✅ NEW PREMIUM CATEGORY BAR */}
+              <div className="relative w-full overflow-hidden pt-2 pb-4">
+                <div className="flex w-full overflow-x-auto scrollbar-hide gap-3 sm:gap-4 px-1 snap-x">
+                  
+                  <button 
+                    onClick={() => setSelectedCategory("All")} 
+                    className={`snap-start shrink-0 px-7 py-3 rounded-[1.25rem] text-sm font-bold whitespace-nowrap transition-all duration-500 ease-out ${
+                      selectedCategory === "All" 
+                      ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 ring-2 ring-orange-500/20 ring-offset-2 ring-offset-[#FAFAFA] scale-105' 
+                      : 'bg-white text-zinc-500 border border-zinc-200 hover:border-zinc-300 hover:text-zinc-900 hover:shadow-md hover:-translate-y-0.5'
+                    }`}
+                  >
+                    All Items
+                  </button>
+                  
+                  {(categories || []).map(c => (
+                    <button 
+                      key={c.id} 
+                      onClick={() => setSelectedCategory(c.name)} 
+                      className={`snap-start shrink-0 px-7 py-3 rounded-[1.25rem] text-sm font-bold whitespace-nowrap transition-all duration-500 ease-out ${
+                        selectedCategory === c.name 
+                        ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 ring-2 ring-orange-500/20 ring-offset-2 ring-offset-[#FAFAFA] scale-105' 
+                        : 'bg-white text-zinc-500 border border-zinc-200 hover:border-zinc-300 hover:text-zinc-900 hover:shadow-md hover:-translate-y-0.5'
+                      }`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                  
+                </div>
+                {/* Fade effect on the right for mobile indicating scroll */}
+                <div className="absolute right-0 top-0 bottom-4 w-12 bg-gradient-to-l from-[#FAFAFA] to-transparent pointer-events-none sm:hidden"></div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
               {(menuItems || []).filter(i => selectedCategory === "All" || i.category === selectedCategory).map(item => (
-                <div key={item.id} className={`bg-white rounded-[2rem] overflow-hidden border border-zinc-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group flex flex-col ${!item.inStock && 'opacity-60'}`}>
-                  <div className="relative overflow-hidden p-2 bg-zinc-50">
-                    <img src={item.image || '/logo.png'} className={`w-full h-48 sm:h-56 object-cover rounded-3xl group-hover:scale-105 transition-transform duration-700 ${!item.inStock && 'grayscale'}`} alt={item.name} onError={(e) => { e.target.src = '/logo.png'; }}/>
-                    {!item.inStock && <div className="absolute inset-0 flex items-center justify-center"><span className="bg-red-600 text-white font-bold px-4 py-2 rounded-xl uppercase tracking-widest text-xs shadow-xl backdrop-blur-sm bg-opacity-90">Out of Stock</span></div>}
+                <div key={item.id} className={`bg-white rounded-[2rem] border border-zinc-100 p-3 sm:p-4 flex flex-col shadow-sm hover:shadow-2xl hover:shadow-zinc-200/50 hover:-translate-y-1.5 transition-all duration-500 ease-out group ${!item.inStock && 'opacity-60'}`}>
+                  <div className="relative overflow-hidden rounded-[1.5rem] bg-zinc-100 aspect-[4/3] mb-4">
+                    <img src={item.image || '/logo.png'} className={`w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-in-out ${!item.inStock && 'grayscale'}`} alt={item.name} onError={(e) => { e.target.src = '/logo.png'; }}/>
+                    {!item.inStock && <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center"><span className="bg-red-500 text-white font-bold px-4 py-1.5 rounded-xl uppercase tracking-widest text-xs shadow-lg">Sold Out</span></div>}
                   </div>
-                  <div className="p-5 sm:p-6 flex flex-col flex-grow">
-                    <div className="flex justify-between items-start mb-3 gap-2">
-                      <h3 className="font-bold text-xl sm:text-2xl text-zinc-900 leading-tight">{item.name}</h3>
-                      <span className="text-orange-600 font-bold text-xl tracking-tight">₹{item.price}</span>
+                  <div className="px-2 pb-2 flex flex-col flex-grow">
+                    <div className="flex justify-between items-start gap-4 mb-2">
+                      <h3 className="font-bold text-xl text-zinc-800 leading-snug group-hover:text-orange-600 transition-colors duration-300">{item.name}</h3>
+                      <span className="text-orange-600 font-extrabold text-xl shrink-0">₹{item.price}</span>
                     </div>
-                    {item.description && <p className="text-sm text-zinc-500 font-medium mb-4 line-clamp-2">{item.description}</p>}
+                    {item.description && <p className="text-sm text-zinc-500 font-medium leading-relaxed line-clamp-2 mb-6">{item.description}</p>}
                     
-                    <div className="mt-auto pt-4">
-                      <button disabled={!item.inStock} onClick={() => { setCart(prev => [...prev, { ...item, cartItemId: Date.now(), quantity: 1 }]); setIsCartOpen(true); }} className={`w-full py-4 rounded-2xl font-bold transition-all duration-300 active:scale-95 ${item.inStock ? 'bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white shadow-sm hover:shadow-orange-500/30' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>{item.inStock ? '+ Add to Order' : 'Unavailable'}</button>
+                    <div className="mt-auto">
+                      <button disabled={!item.inStock} onClick={() => { setCart(prev => [...prev, { ...item, cartItemId: Date.now(), quantity: 1 }]); setIsCartOpen(true); }} className={`w-full py-3.5 rounded-xl font-bold text-sm sm:text-base transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 ${item.inStock ? 'bg-orange-50 text-orange-600 hover:bg-gradient-to-r hover:from-orange-600 hover:to-orange-500 hover:text-white hover:shadow-md hover:shadow-orange-500/20' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>
+                        {item.inStock ? <><Plus className="w-4 h-4"/> Add to Order</> : 'Unavailable'}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -269,7 +305,6 @@ export default function UserApp() {
                      </div>
                   )) : (
                      <>
-                       {/* DEFAULT FALLBACK PLANS (Original content restored) */}
                        <div className="bg-white p-8 sm:p-10 rounded-[2.5rem] border border-zinc-100 shadow-lg hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col relative overflow-hidden">
                          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl"></div>
                          <span className="text-orange-600 font-bold uppercase tracking-widest text-[10px] sm:text-xs mb-4">Standard Pass</span>
@@ -418,12 +453,12 @@ export default function UserApp() {
         <div className="max-w-6xl mx-auto mt-16 pt-8 border-t border-zinc-800/50 text-xs text-center sm:text-left flex flex-col sm:flex-row justify-between items-center gap-6">
           <p className="font-medium text-zinc-500">© {new Date().getFullYear()} Dadi Maa Ke Parathe. All rights reserved.</p>
           <a href="https://instagram.com/axiomdesignsco" target="_blank" rel="noopener noreferrer" className="bg-zinc-900/50 px-5 py-2.5 rounded-full border border-zinc-800 font-medium hover:border-zinc-700 hover:bg-zinc-900 transition-all duration-300 cursor-pointer group">
-            Designed with <Heart className="w-3 h-3 inline text-rose-500 fill-rose-500 mx-1 group-hover:scale-110 transition-transform"/> by <span className="font-bold text-white tracking-widest uppercase text-[10px]">Hardik Solanki</span>
+            Designed with <Heart className="w-3 h-3 inline text-rose-500 fill-rose-500 mx-1 group-hover:scale-110 transition-transform"/> by <span className="font-bold text-white tracking-widest uppercase text-[10px]">Axiom Designs Co.</span>
           </a>
         </div>
       </footer>
 
-      {/* ---------------- MODALS & DRAWERS ---------------- */}
+      {/* ---------------- GLASSMORPHISM MODALS ---------------- */}
       {/* Auth Modal */}
       {showAuthModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm transition-opacity duration-300">
