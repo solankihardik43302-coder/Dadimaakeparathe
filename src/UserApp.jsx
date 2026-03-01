@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ShoppingBag, ArrowRight, Plus, Minus, Heart, Flame, ShieldCheck,
-  LogOut, CheckCircle, Utensils, MapPin, Instagram, X
+  ShoppingBag, ArrowRight, Plus, Minus, Heart, Flame,
+  LogOut, CheckCircle, Utensils, MapPin, Instagram, X, Users, ShieldCheck, Mail, Phone
 } from 'lucide-react';
 import { db } from "./firebase";
 import { ref, onValue, push, set, get } from "firebase/database";
@@ -11,9 +11,10 @@ export default function UserApp() {
   const [menuItems, setMenuItems] = useState([]);
   const [addons, setAddons] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [allPasses, setAllPasses] = useState([]); 
   
   const [contactDetails, setContactDetails] = useState({ 
-    phone: '919876543210', logo: 'https://images.unsplash.com/photo-1565557612110-381dd275225c?auto=format&fit=crop&q=80&w=200&h=200', address: 'Vijay Nagar, Indore, MP', instagram: 'dadimaakeparathe' 
+    phone: '919876543210', email: 'hello@dadimaa.com', logo: '/logo.png', address: 'Vijay Nagar, Indore, MP', instagram: 'dadimaakeparathe' 
   });
   
   const [currentUser, setCurrentUser] = useState(null);
@@ -24,238 +25,325 @@ export default function UserApp() {
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [selectedItemForAddon, setSelectedItemForAddon] = useState(null);
-  const [currentAddons, setCurrentAddons] = useState([]);
-  const [orderSuccess, setOrderSuccess] = useState(false);
 
   useEffect(() => {
     onValue(ref(db, 'menu'), snap => setMenuItems(snap.val() ? Object.entries(snap.val()).map(([id, x]) => ({ id, ...x })) : []));
     onValue(ref(db, 'addons'), snap => setAddons(snap.val() ? Object.entries(snap.val()).map(([id, x]) => ({ id, ...x })) : []));
     onValue(ref(db, 'categories'), snap => setCategories(snap.val() ? Object.entries(snap.val()).map(([id, x]) => ({ id, name: x.name })) : []));
     onValue(ref(db, 'settings'), snap => { if (snap.exists()) setContactDetails(prev => ({ ...prev, ...snap.val() })); });
+    
+    onValue(ref(db, 'meal_passes'), snap => {
+      if (snap.exists()) { setAllPasses(Object.entries(snap.val()).map(([id, x]) => ({ id, ...x }))); } 
+      else { setAllPasses([]); }
+    });
 
     const visited = sessionStorage.getItem('visited');
     if (!visited) {
       get(ref(db, 'stats/visitors')).then(snap => {
-        set(ref(db, 'stats/visitors'), snap.exists() ? snap.val() + 1 : 1);
+        set(ref(db, 'stats/visitors'), (snap.val() || 0) + 1);
         sessionStorage.setItem('visited', 'true');
       });
     }
   }, []);
 
-  const filteredMenu = selectedCategory === "All" ? menuItems : menuItems.filter(item => item.category === selectedCategory);
-  const cartTotal = cart.reduce((total, item) => total + (item.price + item.addons.reduce((s, a) => s + a.price, 0)) * item.quantity, 0);
-
-  const handleAddToCartClick = (item) => {
-    if (item.allowAddons === false || addons.length === 0) { setCart([...cart, { ...item, cartItemId: Date.now(), quantity: 1, addons: [] }]); setIsCartOpen(true); } 
-    else { setSelectedItemForAddon(item); }
-  };
+  const cartTotal = cart.reduce((total, item) => total + (item.price + (item.addons ? item.addons.reduce((s, a) => s + a.price, 0) : 0)) * item.quantity, 0);
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     if (authMode === 'signup') {
       const newUser = { id: Date.now(), ...authForm };
-      push(ref(db, 'users'), newUser); setCurrentUser(newUser); alert("Account ban gaya!");
+      push(ref(db, 'users'), newUser); 
+      setCurrentUser(newUser); 
+      alert("Welcome! Account Created.");
     } else {
       get(ref(db, 'users')).then(snap => {
         if(snap.exists()) {
           const user = Object.values(snap.val()).find(u => u.phone === authForm.phone && u.password === authForm.password);
-          if (user) setCurrentUser(user); else alert("Galat details!");
-        } else { alert("Koi account nahi mila!"); }
+          if (user) setCurrentUser(user); else alert("Wrong Phone or Password!");
+        } else { alert("Please Sign Up first!"); }
       });
     }
     setShowAuthModal(false);
   };
 
+  const calculateDaysLeft = (startDateISO) => {
+    if (!startDateISO) return 0;
+    const start = new Date(startDateISO).getTime();
+    const now = new Date().getTime();
+    const diff = now - start;
+    const daysPassed = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const daysLeft = 30 - daysPassed; 
+    return daysLeft > 0 ? daysLeft : 0;
+  };
+
+  const userPassesList = currentUser ? allPasses.filter(p => p.phone === currentUser.phone) : [];
+  const myPass = userPassesList.length > 0 ? userPassesList[userPassesList.length - 1] : null; 
+  const daysRemaining = myPass ? calculateDaysLeft(myPass.startDate) : 0;
+
+  const handleSubscribe = (planName) => {
+    if (!currentUser) { setShowAuthModal(true); return; }
+    const subData = { userId: currentUser.id, name: currentUser.name, phone: currentUser.phone, plan: planName, startDate: new Date().toISOString() };
+    push(ref(db, 'meal_passes'), subData).then(() => {
+      alert(`${planName} Activated! We will contact you soon.`);
+      setCurrentView('home');
+      window.scrollTo(0,0);
+    });
+  };
+
   const handleWhatsAppCheckout = () => {
     if (!currentUser) return setShowAuthModal(true);
-    push(ref(db, 'orders'), { date: new Date().toLocaleDateString('en-IN'), time: new Date().toLocaleTimeString('en-IN'), customerName: currentUser.name, customerPhone: currentUser.phone, items: cart, total: cartTotal, status: 'Pending' });
+    const orderData = { date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString(), customerName: currentUser.name, customerPhone: currentUser.phone, items: cart, total: cartTotal, status: 'Pending' };
+    push(ref(db, 'orders'), orderData);
 
-    let msg = `*Hi Dadi Maa Ke Parathe!*\nNaya Order:\n`;
-    cart.forEach(item => { msg += `\n*${item.quantity}x ${item.name}*`; if(item.addons.length > 0) msg += `\n   (+ ${item.addons.map(a => a.name).join(', ')})`; });
-    msg += `\n\n*Total Bill: ₹${cartTotal}*\n_Customer: ${currentUser.name} (${currentUser.phone})_`;
+    let msg = `*New Order - Dadi Maa Ke Parathe*\n`;
+    cart.forEach(item => { 
+      msg += `\n*${item.quantity}x ${item.name}*`; 
+    });
+    msg += `\n\n*Total: ₹${cartTotal}*\nName: ${currentUser.name}`;
 
-    const cleanWhatsAppNumber = contactDetails.phone.replace(/\D/g, ''); 
-    window.open(`https://wa.me/${cleanWhatsAppNumber}?text=${encodeURIComponent(msg)}`, '_blank');
-    setCart([]); setOrderSuccess(true);
+    window.open(`https://wa.me/${contactDetails.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    setCart([]);
+    setIsCartOpen(false);
   };
-
-  const getInstagramLink = () => {
-    const rawInsta = contactDetails.instagram || 'dadimaakeparathe';
-    if(rawInsta.includes('http')) return rawInsta;
-    return `https://instagram.com/${rawInsta.replace('@', '')}`;
-  };
-
-  const categoryFilters = [{id: 'all', name: 'All'}, ...categories];
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] font-sans selection:bg-orange-100 selection:text-orange-900 flex flex-col">
-      <nav className="sticky top-0 z-40 w-full bg-white/80 backdrop-blur-md border-b border-zinc-100 px-6 h-20 flex items-center justify-between">
-        <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setCurrentView('home')}>
-          {contactDetails.logo && <img src={contactDetails.logo} className="w-10 h-10 rounded-full border-2 border-orange-100 object-cover" alt="logo" />}
-          <div className="flex flex-col"><span className="text-xl font-bold text-zinc-900 leading-none">Dadi Maa Ke</span><span className="text-xs font-bold text-orange-600 tracking-widest uppercase">Parathe</span></div>
+    <div className="min-h-screen bg-[#FAFAFA] font-sans flex flex-col selection:bg-orange-100">
+      {/* Mobile Friendly Navbar */}
+      <nav className="sticky top-0 z-40 w-full bg-white/90 backdrop-blur-md border-b border-zinc-100 px-4 sm:px-6 py-3 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2 sm:space-x-3 cursor-pointer" onClick={() => {setCurrentView('home'); window.scrollTo(0,0);}}>
+            {contactDetails.logo && <img src={contactDetails.logo} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-orange-100 object-cover shadow-sm" alt="logo" />}
+            <div className="flex flex-col">
+              <span className="text-sm sm:text-xl font-black text-zinc-900 leading-none">Dadi Maa Ke</span>
+              <span className="text-[10px] sm:text-xs font-bold text-orange-600 uppercase tracking-widest">Parathe</span>
+            </div>
+          </div>
+          <div className="hidden sm:flex absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 space-x-8">
+            {/* Added 'Home' to Desktop Links */}
+            {['Home', 'Menu', 'Meal Pass', 'About'].map(v => (
+              <button key={v} onClick={() => {setCurrentView(v.toLowerCase().replace(' ', '')); window.scrollTo(0,0);}} className={`text-sm font-bold transition-colors ${currentView === v.toLowerCase().replace(' ', '') ? 'text-orange-600' : 'text-zinc-500 hover:text-orange-600'}`}>{v}</button>
+            ))}
+          </div>
+          <div className="flex items-center space-x-3 sm:space-x-4">
+            {currentUser ? 
+              <button onClick={() => setCurrentUser(null)} className="text-rose-500 bg-rose-50 p-2 rounded-full hover:bg-rose-100 transition-colors"><LogOut className="w-4 h-4 sm:w-5 sm:h-5"/></button> 
+              : 
+              <button onClick={() => setShowAuthModal(true)} className="text-xs sm:text-sm font-bold bg-orange-50 text-orange-600 px-4 py-2 rounded-full hover:bg-orange-100 transition-colors">Login</button>
+            }
+            <button onClick={() => setIsCartOpen(true)} className="relative p-2 sm:p-2.5 bg-zinc-100 rounded-full hover:bg-zinc-200 transition-colors">
+              <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-900"/>
+              {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-orange-600 text-white text-[10px] w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center font-bold border-2 border-white">{cart.length}</span>}
+            </button>
+          </div>
         </div>
-        <div className="flex space-x-4 md:space-x-8 overflow-x-auto scrollbar-hide py-2 md:py-0 w-full md:w-auto">
-          {['Menu', 'Meal Pass', 'About'].map(v => <button key={v} onClick={() => setCurrentView(v.toLowerCase().replace(' ', ''))} className={`text-sm font-bold ${currentView === v.toLowerCase().replace(' ', '') ? 'text-orange-600' : 'text-zinc-500 hover:text-orange-600'}`}>{v}</button>)}
-        </div>
-        <div className="flex items-center space-x-4">
-          {currentUser ? <button onClick={() => setCurrentUser(null)} className="text-rose-500" title="Logout"><LogOut className="w-5 h-5"/></button> : <button onClick={() => setShowAuthModal(true)} className="text-sm font-bold text-zinc-700 hover:text-orange-600">Login</button>}
-          <button onClick={() => setIsCartOpen(true)} className="relative p-2 bg-zinc-50 rounded-full hover:bg-zinc-100"><ShoppingBag className="w-5 h-5 text-zinc-900"/>{cart.length > 0 && <span className="absolute -top-1 -right-1 bg-orange-600 text-white text-[10px] w-5 h-5 rounded-full flex justify-center items-center font-bold border-2 border-white">{cart.length}</span>}</button>
+        <div className="flex sm:hidden space-x-6 overflow-x-auto scrollbar-hide pt-3 mt-3 border-t border-zinc-100 px-2">
+          {/* Added 'Home' to Mobile Links */}
+          {['Home', 'Menu', 'Meal Pass', 'About'].map(v => (
+            <button key={v} onClick={() => {setCurrentView(v.toLowerCase().replace(' ', '')); window.scrollTo(0,0);}} className={`text-xs font-bold whitespace-nowrap pb-1 ${currentView === v.toLowerCase().replace(' ', '') ? 'text-orange-600 border-b-2 border-orange-600' : 'text-zinc-400'}`}>{v}</button>
+          ))}
         </div>
       </nav>
 
       <main className="flex-grow">
         {currentView === 'home' && (
-          <div className="flex flex-col items-center pt-24 pb-16 text-center animate-in fade-in duration-700 px-6">
-            <div className="inline-flex items-center space-x-2 bg-orange-50 text-orange-700 px-4 py-1.5 rounded-full text-sm font-medium mb-8"><Flame className="w-4 h-4" /><span>Hot & Fresh in Indore</span></div>
-            <h1 className="text-5xl md:text-7xl font-extrabold text-zinc-900 mb-6 leading-tight">The Comfort of Home,<br/><span className="text-orange-600">Delivered.</span></h1>
-            <p className="text-lg text-zinc-500 mb-10 max-w-2xl">Premium, whole-wheat stuffed parathas crafted with grandmother's secret recipes. Because you deserve more than just fast food.</p>
-            <button onClick={() => setCurrentView('menu')} className="px-8 py-4 bg-zinc-900 text-white rounded-full font-bold text-lg flex items-center space-x-2 hover:bg-zinc-800 transition-all shadow-xl mb-12"><span>Explore Menu</span><ArrowRight className="w-5 h-5" /></button>
-            
-            {/* HERO LOGO SECTION */}
-            {contactDetails.logo && (
-              <div className="relative w-48 h-48 md:w-64 md:h-64 mt-4 animate-in zoom-in duration-1000">
-                <img src={contactDetails.logo} alt="Dadi Maa Ke Parathe" className="w-full h-full object-cover rounded-full border-8 border-white shadow-2xl" />
-                <div className="absolute -bottom-4 -right-4 bg-white p-4 rounded-3xl shadow-xl flex items-center space-x-2 border border-orange-50">
-                   <Heart className="w-6 h-6 text-rose-500 fill-rose-500" />
-                   <span className="font-bold text-zinc-800 text-sm">Homemade</span>
-                </div>
-              </div>
-            )}
+          <div className="flex flex-col items-center pt-16 sm:pt-20 pb-16 text-center px-6 animate-in fade-in duration-700">
+            <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold mb-6 text-zinc-900 leading-tight">Ghar Jaisa Swad,<br/><span className="text-orange-600">Ab Indore Mein.</span></h1>
+            <button onClick={() => {setCurrentView('menu'); window.scrollTo(0,0);}} className="px-6 sm:px-8 py-3 sm:py-4 bg-zinc-900 text-white rounded-full font-bold flex items-center space-x-2 shadow-xl hover:bg-zinc-800 hover:scale-105 active:scale-95 transition-all mb-12"><span>Explore Menu</span><ArrowRight/></button>
+            <img src={contactDetails.logo} className="w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 rounded-full border-8 border-white shadow-2xl object-cover hover:rotate-3 transition-transform duration-500" alt="Hero" />
           </div>
         )}
 
         {currentView === 'menu' && (
-          <div className="max-w-6xl mx-auto px-6 py-12 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
-              <div><h2 className="text-3xl font-bold text-zinc-900 mb-2">Our Menu</h2><p className="text-zinc-500">Authentic recipes, premium ingredients.</p></div>
-              <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
-                {categoryFilters.map(c => <button key={c.id} onClick={() => setSelectedCategory(c.name)} className={`whitespace-nowrap px-5 py-2.5 rounded-full text-sm font-bold transition-all ${selectedCategory === c.name ? 'bg-zinc-900 text-white shadow-md' : 'bg-white text-zinc-600 border border-zinc-200'}`}>{c.name}</button>)}
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12 animate-in fade-in">
+            <div className="flex flex-col md:flex-row justify-between mb-8 gap-4 sm:gap-6">
+              <h2 className="text-2xl sm:text-3xl font-bold">Our Menu</h2>
+              <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide w-full md:w-auto">
+                <button onClick={() => setSelectedCategory("All")} className={`px-4 sm:px-5 py-2 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap ${selectedCategory === "All" ? 'bg-zinc-900 text-white' : 'bg-white border text-zinc-600 hover:border-zinc-300'}`}>All</button>
+                {categories.map(c => <button key={c.id} onClick={() => setSelectedCategory(c.name)} className={`px-4 sm:px-5 py-2 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap ${selectedCategory === c.name ? 'bg-zinc-900 text-white' : 'bg-white border text-zinc-600 hover:border-zinc-300'}`}>{c.name}</button>)}
               </div>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredMenu.map(item => (
-                <div key={item.id} className={`group bg-white rounded-3xl overflow-hidden border border-zinc-100 ${!item.inStock && 'opacity-80'}`}>
-                  <div className="h-56 bg-zinc-100 relative overflow-hidden">
-                    {item.image ? <img src={item.image} className={`w-full h-full object-cover ${!item.inStock ? 'grayscale' : 'group-hover:scale-105 transition-transform duration-500'}`} alt="" /> : <Utensils className="w-16 h-16 absolute inset-0 m-auto text-orange-200" />}
-                    {!item.inStock && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><span className="bg-red-600 text-white px-4 py-1.5 font-bold transform -rotate-12 rounded-xl">Out of Stock</span></div>}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+              {menuItems.filter(i => selectedCategory === "All" || i.category === selectedCategory).map(item => (
+                <div key={item.id} className={`bg-white rounded-3xl overflow-hidden border p-4 sm:p-6 transition-all hover:shadow-lg ${!item.inStock && 'opacity-60'}`}>
+                  <div className="relative">
+                    <img src={item.image || '/logo.png'} className={`w-full h-40 sm:h-48 object-cover rounded-2xl mb-4 ${!item.inStock && 'grayscale'}`} alt=""/>
+                    {!item.inStock && <div className="absolute inset-0 flex items-center justify-center"><span className="bg-red-600 text-white font-black px-4 py-1 rounded-lg uppercase tracking-widest text-xs transform -rotate-12 shadow-xl">Out of Stock</span></div>}
                   </div>
-                  <div className="p-6">
-                    <div className="flex justify-between items-start mb-3"><h3 className="text-xl font-bold text-zinc-900">{item.name}</h3><span className="text-lg font-bold text-orange-600">₹{item.price}</span></div>
-                    <p className="text-zinc-500 text-sm mb-6 line-clamp-2">{item.description}</p>
-                    <button disabled={!item.inStock} onClick={() => handleAddToCartClick(item)} className={`w-full py-3.5 font-bold rounded-xl flex items-center justify-center gap-2 ${!item.inStock ? 'bg-zinc-100 text-zinc-400' : 'bg-zinc-50 hover:bg-orange-50 hover:text-orange-700 text-zinc-900'}`}>{!item.inStock ? <span>Currently Unavailable</span> : <><Plus className="w-4 h-4"/> Add to Order</>}</button>
-                  </div>
+                  <div className="flex justify-between items-start mb-2"><h3 className="font-bold text-lg sm:text-xl text-zinc-900">{item.name}</h3><span className="text-orange-600 font-black text-lg">₹{item.price}</span></div>
+                  <button disabled={!item.inStock} onClick={() => { setCart([...cart, {...item, cartItemId: Date.now(), quantity: 1, addons: []}]); setIsCartOpen(true); }} className={`w-full py-3 rounded-xl font-bold mt-4 transition-all ${item.inStock ? 'bg-zinc-50 hover:bg-orange-50 text-zinc-900 hover:text-orange-700 active:scale-95' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>{item.inStock ? '+ Add to Order' : 'Unavailable'}</button>
                 </div>
               ))}
-              {menuItems.length === 0 && <div className="col-span-full text-center py-20 text-zinc-400">Loading Menu / Menu is empty. Ask Admin to update!</div>}
             </div>
           </div>
         )}
 
         {currentView === 'mealpass' && (
-           <div className="max-w-4xl mx-auto px-6 py-16 text-center animate-in fade-in duration-500">
-             <h2 className="text-4xl font-bold mb-4">Monthly Meal Pass</h2>
-             <p className="text-lg text-zinc-500 max-w-xl mx-auto mb-16">Ghar ka khana, har roz discounted rate par.</p>
-             <div className="grid md:grid-cols-2 gap-8 text-left">
-               <div className="bg-white p-8 rounded-3xl border shadow-sm">
-                 <span className="text-orange-600 font-bold text-sm uppercase mb-4">Standard Pass</span>
-                 <div className="flex items-baseline text-5xl font-extrabold text-zinc-900 mb-8">₹2,499<span className="text-xl font-medium text-zinc-400">/mo</span></div>
-                 <button onClick={() => { if(!currentUser) setShowAuthModal(true); else alert('Pass Activated!'); }} className="w-full py-4 bg-zinc-100 text-zinc-900 rounded-xl font-bold hover:bg-zinc-200">Subscribe Now</button>
-               </div>
-               <div className="bg-zinc-900 text-white p-8 rounded-3xl border border-zinc-800">
-                 <span className="text-orange-400 font-bold text-sm uppercase mb-4">Heavy Diet Pass</span>
-                 <div className="flex items-baseline text-5xl font-extrabold text-white mb-8">₹3,999<span className="text-xl font-medium text-zinc-400">/mo</span></div>
-                 <button onClick={() => { if(!currentUser) setShowAuthModal(true); else alert('Pass Activated!'); }} className="w-full py-4 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-500">Subscribe Now</button>
-               </div>
-             </div>
-           </div>
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-16 text-center animate-in fade-in">
+            {myPass && daysRemaining > 0 ? (
+              <div className="bg-green-50 border border-green-200 p-8 sm:p-12 rounded-[2.5rem] shadow-xl text-center max-w-lg mx-auto transform hover:scale-105 transition-transform">
+                <ShieldCheck className="w-16 h-16 sm:w-20 sm:h-20 text-green-500 mx-auto mb-6" />
+                <h3 className="text-2xl sm:text-3xl font-black text-green-900 mb-2">Your {myPass.plan} is Active!</h3>
+                <div className="text-6xl sm:text-7xl font-black text-green-600 my-6 tracking-tighter">
+                  {daysRemaining} <span className="text-xl sm:text-2xl font-bold text-green-800 tracking-normal block sm:inline">Days Left</span>
+                </div>
+                <p className="text-green-700 font-bold bg-green-200/50 py-2 px-4 rounded-full inline-block mt-4">Enjoy home-cooked meals without any hassle.</p>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-3xl sm:text-4xl font-black mb-10 sm:mb-16">Choose Your Meal Pass</h2>
+                {myPass && daysRemaining === 0 && <div className="bg-red-50 text-red-600 font-bold p-4 rounded-xl mb-8 max-w-md mx-auto">Your previous pass has expired. Please renew!</div>}
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 text-left">
+                  <div className="bg-white p-6 sm:p-8 rounded-3xl border shadow-sm flex flex-col hover:border-orange-500 hover:shadow-lg transition-all">
+                    <span className="text-orange-600 font-black uppercase tracking-widest text-[10px] sm:text-xs mb-4">Standard Pass</span>
+                    <div className="text-4xl sm:text-5xl font-black mb-8">₹2,499<span className="text-lg sm:text-xl text-zinc-400 font-medium">/30 Days</span></div>
+                    <ul className="mb-8 space-y-2 text-sm text-zinc-600 font-medium"><li>✓ 1 Meal Every Day</li><li>✓ Free Delivery</li></ul>
+                    <button onClick={() => handleSubscribe('Standard Pass')} className="w-full py-4 bg-zinc-100 rounded-2xl font-bold hover:bg-zinc-200 active:scale-95 transition-all mt-auto text-sm sm:text-base">Subscribe Now</button>
+                  </div>
+                  <div className="bg-zinc-900 text-white p-6 sm:p-8 rounded-3xl border border-zinc-800 shadow-2xl flex flex-col transform sm:-translate-y-4">
+                    <span className="text-orange-400 font-black uppercase tracking-widest text-[10px] sm:text-xs mb-4 flex items-center gap-2"><Flame className="w-4 h-4"/> Heavy Diet Pass</span>
+                    <div className="text-4xl sm:text-5xl font-black mb-8 text-white">₹3,999<span className="text-lg sm:text-xl text-zinc-500 font-medium">/30 Days</span></div>
+                    <ul className="mb-8 space-y-2 text-sm text-zinc-400 font-medium"><li>✓ 2 Meals Every Day</li><li>✓ Sunday Special Included</li></ul>
+                    <button onClick={() => handleSubscribe('Heavy Diet Pass')} className="w-full py-4 bg-orange-600 rounded-2xl font-bold hover:bg-orange-500 active:scale-95 transition-all mt-auto shadow-lg shadow-orange-900/50 text-sm sm:text-base">Get Premium Pass</button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         )}
-        
+
         {currentView === 'about' && (
-          <div className="max-w-3xl mx-auto px-6 py-20 animate-in fade-in">
-            <h2 className="text-4xl font-extrabold mb-10 text-center">Humari Kahani</h2>
-            <div className="bg-white p-10 rounded-[2.5rem] border space-y-6">
-               <p className="text-zinc-600 text-lg"><span className="text-zinc-900 font-bold">Dadi Maa Ke Parathe</span> sirf ek cloud kitchen nahi, ek chhota sa ashiyana hai. Humara maqsad har bite mein wahi sukoon aur swaad dena hai jo dadi ke hath ke bane garma-garam parathon mein hota hai.</p>
-               <p className="text-zinc-600 text-lg">Pure gehun ka atta, fresh ingredients, aur dher sara pyaar... Indore ke busy dino aur der raat ki padhai ke beech, hum aapke liye ghar ka swaad laate hain.</p>
-               <div className="pt-6 border-t flex items-center gap-4"><Heart className="w-8 h-8 text-rose-500 fill-rose-500" /><span className="text-orange-600 font-bold text-xl italic">"Ghar se door, par ghar ke swaad ke bilkul paas."</span></div>
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-12 sm:py-16 animate-in fade-in">
+            <h2 className="text-3xl sm:text-4xl font-extrabold mb-8 text-center text-zinc-900">Our Story</h2>
+            
+            <div className="bg-white p-8 sm:p-12 rounded-[3rem] border shadow-sm mb-12">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 mb-8 text-center sm:text-left">
+                <div className="bg-orange-50 p-5 rounded-full shrink-0"><Heart className="w-10 h-10 text-orange-600 fill-orange-600" /></div>
+                <div>
+                  <h3 className="text-2xl sm:text-3xl font-black mb-2">Ek Choti Street Shop Se...</h3>
+                  <p className="text-zinc-500 font-medium text-sm sm:text-base">A journey fueled by passion and authentic taste.</p>
+                </div>
+              </div>
+              <div className="space-y-6 text-zinc-600 leading-relaxed sm:text-lg">
+                <p>
+                  Dadi Maa Ke Parathe ki shuruaat ek choti si street shop se hui thi. Ek chhota sa thela, par sapne aur swad dono bade the. Humara maksad sirf logo ka pet bharna nahi tha, balki unhe wo comfort aur pyar dena tha jo sirf ghar ke khane mein milta hai.
+                </p>
+                <p>
+                  Aaj 3 saal baad bhi, Indore mein successfully chalne ke bawajood, humara philosophy wahi hai. Isliye humare yahan bahar ka staff kam, aur <strong className="text-zinc-900">ghar ke log hi zyada kaam karte hain.</strong> Taki har ek parathe mein dadi maa ka wahi pyaar, care aur authentic 'Ghar Jaisa Swad' barkarar rahe. Hum khana banate nahi, khilate hain!
+                </p>
+              </div>
             </div>
           </div>
         )}
       </main>
 
-      <footer className="py-10 bg-white border-t mt-auto">
-         <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6 text-sm text-zinc-500">
-           <div className="flex flex-col items-center md:items-start gap-2">
-             <div className="flex items-center gap-2 text-zinc-900 font-bold"><MapPin className="w-4 h-4 text-orange-600" /><span>{contactDetails.address}</span></div>
-             <p>© 2026 Dadi Maa Ke Parathe. All rights reserved.</p>
-             <p>Designed by <span className="font-bold text-zinc-900">Hardik Solanki</span></p>
-           </div>
-           <a href={getInstagramLink()} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-zinc-600 font-bold bg-zinc-50 px-4 py-2 rounded-xl hover:text-orange-600 hover:bg-orange-50 transition-colors"><Instagram className="w-5 h-5"/> Follow on Instagram</a>
-         </div>
+      <footer className="bg-zinc-950 text-zinc-400 py-12 px-6 mt-auto">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-10">
+          
+          <div className="space-y-4">
+            <div className="flex items-center space-x-3">
+              {contactDetails.logo && <img src={contactDetails.logo} className="w-12 h-12 rounded-full border border-zinc-800" alt="logo" />}
+              <div>
+                <span className="text-xl font-black text-white leading-none block">Dadi Maa Ke</span>
+                <span className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">Parathe</span>
+              </div>
+            </div>
+            <p className="text-sm text-zinc-500 leading-relaxed">Premium whole-wheat parathas crafted with grandmother's secret recipes. Ghar Jaisa Swad, Ab Indore Mein.</p>
+          </div>
+
+          <div>
+            <h4 className="text-white font-black mb-5 uppercase tracking-widest text-xs">Quick Links</h4>
+            <ul className="space-y-3 text-sm font-medium">
+              <li><button onClick={() => {setCurrentView('home'); window.scrollTo(0,0);}} className="hover:text-orange-500 transition-colors flex items-center gap-2"><ArrowRight className="w-3 h-3"/> Home</button></li>
+              <li><button onClick={() => {setCurrentView('menu'); window.scrollTo(0,0);}} className="hover:text-orange-500 transition-colors flex items-center gap-2"><ArrowRight className="w-3 h-3"/> Order Menu</button></li>
+              <li><button onClick={() => {setCurrentView('mealpass'); window.scrollTo(0,0);}} className="hover:text-orange-500 transition-colors flex items-center gap-2"><ArrowRight className="w-3 h-3"/> Meal Passes</button></li>
+              <li><button onClick={() => {setCurrentView('about'); window.scrollTo(0,0);}} className="hover:text-orange-500 transition-colors flex items-center gap-2"><ArrowRight className="w-3 h-3"/> Our Story</button></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-white font-black mb-5 uppercase tracking-widest text-xs">Get In Touch</h4>
+            <ul className="space-y-4 text-sm">
+              <li className="flex items-center gap-3"><div className="bg-zinc-900 p-2 rounded-lg"><Phone className="w-4 h-4 text-orange-500"/></div> {contactDetails.phone}</li>
+              <li className="flex items-center gap-3"><div className="bg-zinc-900 p-2 rounded-lg"><Mail className="w-4 h-4 text-orange-500"/></div> {contactDetails.email || 'hello@dadimaa.com'}</li>
+              <li className="flex items-center gap-3"><div className="bg-zinc-900 p-2 rounded-lg"><Instagram className="w-4 h-4 text-orange-500"/></div> @{contactDetails.instagram}</li>
+              <li className="flex items-start gap-3"><div className="bg-zinc-900 p-2 rounded-lg mt-1"><MapPin className="w-4 h-4 text-orange-500"/></div> <span className="leading-relaxed">{contactDetails.address}</span></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-white font-black mb-5 uppercase tracking-widest text-xs">Find Us</h4>
+            <div className="rounded-2xl overflow-hidden h-32 border border-zinc-800 opacity-80 hover:opacity-100 transition-opacity">
+              <iframe 
+                title="Google Maps Location"
+                width="100%" 
+                height="100%" 
+                style={{ border: 0 }}
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(contactDetails.address || 'Vijay Nagar, Indore')}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
+                allowFullScreen=""
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              ></iframe>
+            </div>
+          </div>
+
+        </div>
+
+        <div className="max-w-6xl mx-auto mt-12 pt-6 border-t border-zinc-800 text-xs text-center sm:text-left flex flex-col sm:flex-row justify-between items-center gap-4">
+          <p className="font-medium">© {new Date().getFullYear()} Dadi Maa Ke Parathe. All rights reserved.</p>
+          <p className="bg-zinc-900 px-4 py-2 rounded-full border border-zinc-800 font-medium">
+            Designed with <Heart className="w-3 h-3 inline text-red-500 fill-red-500 mx-1 animate-pulse"/> by <span className="font-bold text-white tracking-widest uppercase text-[10px]">Hardik Solanki.</span>
+          </p>
+        </div>
       </footer>
 
-      {isCartOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsCartOpen(false)}></div>
-          <div className="relative w-full max-w-md bg-white h-full p-8 flex flex-col animate-in slide-in-from-right duration-300">
-             <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-bold">Cart</h2><button onClick={() => setIsCartOpen(false)} className="p-2 bg-zinc-100 rounded-full"><X className="w-5 h-5"/></button></div>
-             {orderSuccess ? (
-               <div className="text-center flex flex-col items-center justify-center h-full"><CheckCircle className="w-16 h-16 text-green-500 mb-6"/><h3 className="text-2xl font-bold mb-2">Order Placed!</h3><button onClick={() => { setIsCartOpen(false); setOrderSuccess(false); }} className="mt-8 bg-zinc-900 text-white w-full py-4 rounded-2xl font-bold">Back to Menu</button></div>
-             ) : (
-               <>
-                 <div className="flex-1 overflow-y-auto space-y-6">
-                    {cart.map(item => (
-                      <div key={item.cartItemId} className="flex justify-between border-b pb-4">
-                        <div><div className="font-bold">{item.name}</div><div className="text-xs text-zinc-500">{item.addons.map(a => a.name).join(', ')}</div></div>
-                        <div className="flex items-center gap-3">
-                           <button onClick={() => { const newCart = [...cart]; const idx = newCart.findIndex(x => x.cartItemId === item.cartItemId); if (newCart[idx].quantity > 1) newCart[idx].quantity -= 1; else newCart.splice(idx, 1); setCart(newCart); }} className="p-1 bg-zinc-100 rounded hover:bg-zinc-200"><Minus className="w-3 h-3"/></button>
-                           <div className="font-bold w-4 text-center">{item.quantity}</div>
-                           <button onClick={() => { const newCart = [...cart]; const idx = newCart.findIndex(x => x.cartItemId === item.cartItemId); newCart[idx].quantity += 1; setCart(newCart); }} className="p-1 bg-zinc-100 rounded hover:bg-zinc-200"><Plus className="w-3 h-3"/></button>
-                        </div>
-                      </div>
-                    ))}
-                    {cart.length === 0 && <div className="text-center py-20 text-zinc-400"><ShoppingBag className="w-12 h-12 opacity-20 mx-auto mb-4" /><p>Cart khali hai!</p></div>}
-                 </div>
-                 {cart.length > 0 && <div className="pt-6 border-t"><div className="flex justify-between text-2xl font-bold mb-6"><span>Total</span><span>₹{cartTotal}</span></div><button onClick={handleWhatsAppCheckout} className="w-full bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-lg">Checkout on WhatsApp</button></div>}
-               </>
-             )}
-          </div>
-        </div>
-      )}
-
-      {selectedItemForAddon && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedItemForAddon(null)}></div>
-          <div className="relative bg-white p-8 rounded-[2.5rem] w-full max-w-sm animate-in zoom-in-95">
-            <h3 className="text-2xl font-bold mb-1">{selectedItemForAddon.name}</h3>
-            <p className="text-zinc-500 text-sm mb-6">Extra swaad add karein!</p>
-            {addons.map(a => (
-              <div key={a.id} onClick={() => setCurrentAddons(prev => prev.find(x => x.id === a.id) ? prev.filter(x => x.id !== a.id) : [...prev, a])} className={`p-4 border-2 rounded-2xl mb-3 flex justify-between cursor-pointer ${currentAddons.find(x=>x.id===a.id) ? 'border-orange-500 bg-orange-50 text-orange-900 font-bold' : 'border-zinc-100 hover:border-zinc-200'}`}>
-                <span>{a.name}</span><span>+₹{a.price}</span>
-              </div>
-            ))}
-            <button onClick={() => { setCart([...cart, { ...selectedItemForAddon, cartItemId: Date.now(), quantity: 1, addons: currentAddons }]); setSelectedItemForAddon(null); setCurrentAddons([]); setIsCartOpen(true); }} className="w-full bg-zinc-900 text-white py-4 rounded-2xl font-bold mt-4 shadow-xl hover:bg-zinc-800">Add to Cart</button>
-          </div>
-        </div>
-      )}
-
+      {/* Auth Modal */}
       {showAuthModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAuthModal(false)}></div>
-          <div className="relative bg-white p-8 rounded-[2.5rem] w-full max-w-sm">
-            <button onClick={() => setShowAuthModal(false)} className="absolute top-6 right-6 p-2 bg-zinc-100 rounded-full hover:bg-zinc-200"><X className="w-4 h-4"/></button>
-            <h3 className="text-2xl font-bold mb-2">{authMode === 'login' ? 'Login' : 'Sign Up'}</h3>
-            <p className="text-zinc-500 text-sm mb-6">Account banayein aur order karein.</p>
-            {authMode === 'signup' && <input placeholder="Aapka Naam" className="w-full border p-4 rounded-2xl mb-4 outline-none" onChange={e => setAuthForm({...authForm, name: e.target.value})} />}
-            <input placeholder="Phone Number" className="w-full border p-4 rounded-2xl mb-4 outline-none" onChange={e => setAuthForm({...authForm, phone: e.target.value})} />
-            <input type="password" placeholder="Password" className="w-full border p-4 rounded-2xl mb-6 outline-none" onChange={e => setAuthForm({...authForm, password: e.target.value})} />
-            <button onClick={handleAuthSubmit} className="w-full bg-orange-600 text-white py-4 rounded-2xl font-bold">{authMode === 'login' ? 'Login' : 'Sign Up'}</button>
-            <p className="mt-6 text-center text-sm"><button onClick={() => setAuthMode(authMode==='login'?'signup':'login')} className="text-orange-600 font-bold underline">Switch to {authMode==='login'?'Sign Up':'Login'}</button></p>
+          <div className="relative bg-white p-6 sm:p-8 rounded-[2rem] w-full max-w-sm animate-in zoom-in-95">
+            <X className="absolute top-6 right-6 cursor-pointer text-zinc-400 hover:text-zinc-900" onClick={() => setShowAuthModal(false)}/>
+            <h3 className="text-2xl font-bold mb-6">{authMode === 'login' ? 'Welcome Back!' : 'Create Account'}</h3>
+            <form onSubmit={handleAuthSubmit} className="space-y-4">
+              {authMode === 'signup' && <input placeholder="Your Name" required className="w-full border-2 border-zinc-100 p-4 rounded-2xl outline-none focus:border-orange-500 font-medium" onChange={e => setAuthForm({...authForm, name: e.target.value})} />}
+              <input placeholder="Phone Number" required className="w-full border-2 border-zinc-100 p-4 rounded-2xl outline-none focus:border-orange-500 font-medium" onChange={e => setAuthForm({...authForm, phone: e.target.value})} />
+              <input type="password" placeholder="Password" required className="w-full border-2 border-zinc-100 p-4 rounded-2xl outline-none focus:border-orange-500 font-medium" onChange={e => setAuthForm({...authForm, password: e.target.value})} />
+              <button type="submit" className="w-full bg-orange-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-orange-500 shadow-xl">{authMode === 'login' ? 'Login' : 'Sign Up'}</button>
+            </form>
+            <button onClick={() => setAuthMode(authMode==='login'?'signup':'login')} className="w-full text-center mt-6 text-zinc-500 text-sm">
+              {authMode==='login' ? 'Don\'t have an account? ' : 'Already have an account? '}<span className="text-orange-600 font-bold underline">Click Here</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Cart Drawer */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsCartOpen(false)}></div>
+          <div className="relative w-full sm:max-w-md bg-white h-full p-6 sm:p-8 flex flex-col shadow-2xl animate-in slide-in-from-right">
+             <div className="flex justify-between items-center mb-8 font-black text-2xl"><span>Your Order</span><X className="cursor-pointer bg-zinc-100 p-2 rounded-full hover:bg-zinc-200 w-10 h-10" onClick={() => setIsCartOpen(false)}/></div>
+             <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                {cart.map(item => (
+                  <div key={item.cartItemId} className="flex justify-between items-center border-b border-zinc-100 pb-4">
+                    <div><div className="font-bold text-zinc-900">{item.name}</div><div className="text-xs font-bold text-orange-600">₹{item.price} x {item.quantity}</div></div>
+                    <div className="flex items-center gap-4">
+                      <div className="font-black text-lg">₹{item.price * item.quantity}</div>
+                      <button onClick={() => setCart(cart.filter(c => c.cartItemId !== item.cartItemId))} className="text-rose-500 bg-rose-50 p-2 rounded-xl hover:bg-rose-100 transition-colors"><Trash2 className="w-4 h-4"/></button>
+                    </div>
+                  </div>
+                ))}
+                {cart.length === 0 && <div className="text-center py-20 text-zinc-400 font-bold flex flex-col items-center"><ShoppingBag className="w-16 h-16 mb-4 opacity-20"/>Cart is empty!</div>}
+             </div>
+             {cart.length > 0 && (
+               <div className="pt-6 border-t border-zinc-100 mt-auto">
+                 <div className="flex justify-between text-xl sm:text-2xl font-black mb-6"><span>Total Bill</span><span>₹{cartTotal}</span></div>
+                 <button onClick={handleWhatsAppCheckout} className="w-full bg-green-600 text-white py-4 sm:py-5 rounded-2xl font-black text-base sm:text-lg hover:bg-green-500 shadow-xl shadow-green-900/20 active:scale-95 transition-all">Order on WhatsApp</button>
+               </div>
+             )}
           </div>
         </div>
       )}
     </div>
   );
-
 }
