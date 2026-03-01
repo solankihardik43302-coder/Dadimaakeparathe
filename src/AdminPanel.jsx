@@ -97,43 +97,64 @@ export default function AdminPanel() {
     downloadCSV(template, "bulk_menu_template");
   };
 
-  // ==========================================
-  // LATEST GOOGLE DRIVE LINK BYPASS LOGIC
-  // ==========================================
   const convertDriveLink = (url) => {
     if (!url) return '';
-    // Extract ID from normal drive link
     const driveRegex = /(?:drive\.google\.com\/file\/d\/|drive\.google\.com\/open\?id=)([\w-]+)/;
     const match = url.match(driveRegex);
     if (match && match[1]) {
-      // Use lh3.googleusercontent.com which bypasses normal CORS and view restrictions on websites
-      return `https://lh3.googleusercontent.com/d/${match[1]}`;
+      return `https://lh3.googleusercontent.com/d/$${match[1]}`;
     }
     return url; 
   };
 
+  // =========================================================
+  // AUTO CATEGORY CREATOR LOGIC INCLUDED HERE
+  // =========================================================
   const handleBulkUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    
     Papa.parse(file, {
       header: true, skipEmptyLines: true,
       complete: (results) => {
         let count = 0;
+        
+        // Pehle se bani hui categories ke naam ka array (case-insensitive comparison ke liye)
+        const existingCategoryNames = categories.map(c => c.name.toLowerCase());
+        // Ek temporary array taaki same upload mein 2 baar ek hi category push na ho
+        const newlyAddedCategories = [];
+
         results.data.forEach(item => {
           if (item.name && item.price) {
+            
+            // 1. Menu Item Upload karna
+            const catName = item.category ? item.category.trim() : 'Uncategorized';
             push(ref(db, 'menu'), { 
               name: item.name.trim(), 
               price: Number(item.price) || 0, 
-              category: item.category ? item.category.trim() : 'Uncategorized', 
+              category: catName, 
               description: item.description ? item.description.trim() : '', 
               image: convertDriveLink(item.image ? item.image.trim() : ''), 
               inStock: true, 
               allowAddons: String(item.allowAddons).toLowerCase() === 'true' 
             });
             count++;
+
+            // 2. Category ko Auto-Create karna (agar wo missing hai)
+            const catNameLower = catName.toLowerCase();
+            if (!existingCategoryNames.includes(catNameLower) && !newlyAddedCategories.includes(catNameLower)) {
+               push(ref(db, 'categories'), { name: catName });
+               newlyAddedCategories.push(catNameLower); // Mark as added in this session
+            }
+            
           }
         });
-        if (count > 0) alert(`Success! ${count} Items uploaded.`); else alert("Format error."); 
+        
+        if (count > 0) {
+          alert(`Success! ${count} Items Menu mein add ho gaye. \nSath hi nayi categories bhi auto-create ho gayi hain!`);
+        } else {
+          alert("Format error. Kripya template check karein.");
+        }
         e.target.value = null; 
       }
     });
@@ -142,11 +163,9 @@ export default function AdminPanel() {
   const saveItem = (e) => {
     e.preventDefault();
     if (!newItem.category) return alert('Category select karo!');
-    
-    // Apply Converter Before Saving
     const processedImage = convertDriveLink(newItem.image);
-    
     const data = { ...newItem, price: Number(newItem.price), image: processedImage, inStock: true };
+    
     if (editId) { 
       update(ref(db, `menu/${editId}`), data); 
       setEditId(null); 
@@ -326,7 +345,6 @@ export default function AdminPanel() {
                {menuItems.map(m => (
                  <div key={m.id} className={`p-4 rounded-3xl border flex justify-between items-center transition-all ${m.inStock ? 'bg-zinc-900 border-zinc-800 hover:shadow-lg' : 'bg-red-900/10 border-red-900/50'}`}>
                    <div className="flex items-center gap-3 sm:gap-4 truncate pr-2">
-                     {/* Google Drive Link usually works, but added a reliable fallback layout */}
                      <div className="relative flex-shrink-0 bg-zinc-950 rounded-xl overflow-hidden flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 border border-zinc-800">
                        {m.image ? <img src={m.image} className={`w-full h-full object-cover ${!m.inStock && 'grayscale opacity-50'}`} alt="" onError={(e) => e.target.src = '/logo.png'} /> : <span className="text-[10px] text-zinc-600">No Img</span>}
                        {!m.inStock && <Ban className="absolute inset-0 m-auto text-red-600 w-5 h-5 sm:w-6 sm:h-6"/>}
@@ -356,8 +374,8 @@ export default function AdminPanel() {
                <h4 className="text-white font-bold mb-4 flex items-center gap-2"><Download className="w-4 h-4 text-orange-500"/> Instructions</h4>
                <ul className="text-xs space-y-2 text-zinc-500 list-disc pl-4">
                  <li>Pehle niche button se template download karein.</li>
-                 <li>Columns ko bilkul mat badlein.</li>
-                 <li>Aap directly Google Drive ka link sheet mein paste kar sakte ho.</li>
+                 <li>Columns ko bilkul mat badlein (name, price, category).</li>
+                 <li>Nayi Category auto-create ho jayegi agar wo exist nahi karti.</li>
                </ul>
                <button onClick={downloadBulkTemplate} className="w-full mt-6 bg-zinc-800 text-white py-3 rounded-xl font-bold hover:bg-zinc-700 transition-all text-sm">Download Template</button>
             </div>
