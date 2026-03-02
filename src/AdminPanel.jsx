@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Lock, LogOut, Wallet, Calendar, Users, 
   Trash2, Check, Ban, Utensils, PlusCircle, Edit, Download, Tags, Eye, ShieldCheck, Upload,
-  TrendingUp, TrendingDown, DollarSign, MapPin, Ticket, Power
+  TrendingUp, TrendingDown, DollarSign, MapPin, Ticket, Power, Filter
 } from 'lucide-react';
 import { db } from "./firebase";
 import { ref, onValue, set, push, update, remove } from "firebase/database";
@@ -48,9 +48,10 @@ export default function AdminPanel() {
   const [promoCodes, setPromoCodes] = useState([]);
   const [visitors, setVisitors] = useState(0);
   
+  // Delivery Settings State
   const [contactDetails, setContactDetails] = useState({ 
     phone: '', email: '', logo: '/logo.png', address: '', instagram: '',
-    deliveryCharge: 30, freeDeliveryThreshold: 299
+    deliveryCharge: 30, freeDeliveryThreshold: 299, isDeliveryActive: true
   });
 
   const [dateFilter, setDateFilter] = useState({ from: '', to: '' });
@@ -66,6 +67,8 @@ export default function AdminPanel() {
   const [editPassData, setEditPassData] = useState({ name: '', phone: '', plan: '' });
   const [editPlanId, setEditPlanId] = useState(null);
   const [newPlan, setNewPlan] = useState({ name: '', price: '', duration: '30 Days', features: '' });
+
+  const [adminCategoryFilter, setAdminCategoryFilter] = useState('All');
 
   useEffect(() => {
     if (!isAdminAuthenticated) return;
@@ -133,7 +136,8 @@ export default function AdminPanel() {
               name: item.name.trim(), price: Number(item.price) || 0, category: catName, 
               description: item.description ? item.description.trim() : '', 
               image: convertDriveLink(item.image ? item.image.trim() : ''), 
-              inStock: true, allowAddons: String(item.allowAddons).toLowerCase() === 'true' 
+              inStock: true, allowAddons: String(item.allowAddons).toLowerCase() === 'true',
+              createdAt: new Date().toISOString()
             });
             count++;
             if (!existingCategoryNames.includes(catName.toLowerCase()) && !newlyAddedCategories.includes(catName.toLowerCase())) {
@@ -152,7 +156,10 @@ export default function AdminPanel() {
     e.preventDefault();
     if (!newItem.category) return alert('Category select karo!');
     const processedImage = convertDriveLink(newItem.image);
-    const data = { ...newItem, price: Number(newItem.price), image: processedImage, inStock: true };
+    const data = { 
+      ...newItem, price: Number(newItem.price), image: processedImage, inStock: true,
+      createdAt: newItem.createdAt ? newItem.createdAt : new Date().toISOString() 
+    };
     if (editId) { update(ref(db, `menu/${editId}`), data); setEditId(null); } 
     else { push(ref(db, 'menu'), data); }
     setNewItem({ name: '', price: '', category: '', description: '', image: '', allowAddons: true });
@@ -169,58 +176,33 @@ export default function AdminPanel() {
   const savePromo = (e) => {
     e.preventDefault();
     if(newPromo.code.trim() === '' || newPromo.value === '' || newPromo.minOrder === '') return alert("Please fill required fields.");
-    
     const promoData = {
-      code: newPromo.code.toUpperCase().trim(),
-      type: newPromo.type, 
-      value: Number(newPromo.value),
-      maxDiscount: newPromo.type === 'PERCENT' ? Number(newPromo.maxDiscount || 0) : 0,
-      minOrder: Number(newPromo.minOrder),
+      code: newPromo.code.toUpperCase().trim(), type: newPromo.type, value: Number(newPromo.value),
+      maxDiscount: newPromo.type === 'PERCENT' ? Number(newPromo.maxDiscount || 0) : 0, minOrder: Number(newPromo.minOrder),
       isActive: newPromo.isActive !== undefined ? newPromo.isActive : true
     };
-
     if (editPromoId) {
-      update(ref(db, `promo_codes/${editPromoId}`), promoData).then(() => {
-        alert("Coupon Updated Successfully!");
-        setEditPromoId(null);
-        setNewPromo({ code: '', type: 'FLAT', value: '', maxDiscount: '', minOrder: '', isActive: true });
-      });
+      update(ref(db, `promo_codes/${editPromoId}`), promoData).then(() => { alert("Coupon Updated Successfully!"); setEditPromoId(null); setNewPromo({ code: '', type: 'FLAT', value: '', maxDiscount: '', minOrder: '', isActive: true }); });
     } else {
-      push(ref(db, 'promo_codes'), promoData).then(() => {
-        alert("New Coupon Active!");
-        setNewPromo({ code: '', type: 'FLAT', value: '', maxDiscount: '', minOrder: '', isActive: true });
-      });
+      push(ref(db, 'promo_codes'), promoData).then(() => { alert("New Coupon Active!"); setNewPromo({ code: '', type: 'FLAT', value: '', maxDiscount: '', minOrder: '', isActive: true }); });
     }
   };
 
-  const togglePromoStatus = (id, currentStatus) => {
-    update(ref(db, `promo_codes/${id}`), { isActive: !currentStatus });
-  };
-
-  const handleEditPromo = (p) => {
-    setEditPromoId(p.id);
-    setNewPromo({
-      code: p.code, type: p.type || 'FLAT', value: p.value,
-      maxDiscount: p.maxDiscount || '', minOrder: p.minOrder,
-      isActive: p.isActive !== undefined ? p.isActive : true
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const togglePromoStatus = (id, currentStatus) => { update(ref(db, `promo_codes/${id}`), { isActive: !currentStatus }); };
+  const handleEditPromo = (p) => { setEditPromoId(p.id); setNewPromo({ code: p.code, type: p.type || 'FLAT', value: p.value, maxDiscount: p.maxDiscount || '', minOrder: p.minOrder, isActive: p.isActive !== undefined ? p.isActive : true }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
   const saveSettings = () => {
     const updatedSettings = {
       ...contactDetails,
       deliveryCharge: contactDetails.deliveryCharge === '' ? 0 : Number(contactDetails.deliveryCharge),
-      freeDeliveryThreshold: contactDetails.freeDeliveryThreshold === '' ? 0 : Number(contactDetails.freeDeliveryThreshold)
+      freeDeliveryThreshold: contactDetails.freeDeliveryThreshold === '' ? 0 : Number(contactDetails.freeDeliveryThreshold),
+      isDeliveryActive: contactDetails.isDeliveryActive !== undefined ? contactDetails.isDeliveryActive : true
     };
-    set(ref(db, 'settings'), updatedSettings).then(() => {
-      alert("Settings Updated Successfully!");
-    });
+    set(ref(db, 'settings'), updatedSettings).then(() => { alert("Settings Updated Successfully!"); });
   };
 
   if (!isAdminAuthenticated) return <AdminLogin onLogin={(p) => p === 'admin123' ? setIsAdminAuthenticated(true) : alert("Wrong Password")} />;
 
-  // UI STYLES ENHANCED FOR SMOOTHNESS
   const cardStyle = "bg-zinc-900/40 backdrop-blur-xl border border-zinc-800/50 rounded-3xl shadow-xl hover:shadow-2xl hover:border-zinc-700/50 transition-all duration-500 ease-out";
   const inputStyle = "w-full bg-zinc-950/60 border border-zinc-800 p-3.5 sm:p-4 rounded-xl text-white outline-none focus:border-orange-500 focus:bg-zinc-900 focus:ring-4 focus:ring-orange-500/10 transition-all duration-300 font-medium text-sm shadow-inner";
   const btnPrimary = "bg-gradient-to-r from-orange-600 to-orange-500 text-white font-bold py-3.5 sm:py-4 rounded-xl shadow-[0_8px_30px_-8px_rgba(249,115,22,0.4)] hover:shadow-[0_8px_30px_-8px_rgba(249,115,22,0.6)] hover:-translate-y-0.5 active:scale-95 transition-all duration-300";
@@ -299,9 +281,7 @@ export default function AdminPanel() {
           <div className="space-y-6 max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
             <form onSubmit={savePromo} className={`${cardStyle} p-6 sm:p-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5`}>
               <h3 className="sm:col-span-full text-xl font-extrabold text-white mb-2 flex items-center gap-2"><Ticket className="text-orange-500"/> {editPromoId ? 'Edit Coupon' : 'Create New Coupon'}</h3>
-              
               <div><label className="text-[10px] uppercase font-bold text-zinc-500 mb-2 block tracking-widest">Coupon Code</label><input placeholder="e.g. PARTY20" required className={inputStyle} value={newPromo.code} onChange={e => setNewPromo({...newPromo, code: e.target.value.toUpperCase()})} /></div>
-              
               <div>
                 <label className="text-[10px] uppercase font-bold text-zinc-500 mb-2 block tracking-widest">Discount Type</label>
                 <select className={inputStyle} value={newPromo.type} onChange={e => setNewPromo({...newPromo, type: e.target.value})}>
@@ -309,15 +289,11 @@ export default function AdminPanel() {
                   <option value="PERCENT">Percentage (%)</option>
                 </select>
               </div>
-
               <div><label className="text-[10px] uppercase font-bold text-zinc-500 mb-2 block tracking-widest">Value (₹ or %)</label><input type="number" placeholder="e.g. 50 or 20" required className={inputStyle} value={newPromo.value} onChange={e => setNewPromo({...newPromo, value: e.target.value})} /></div>
-              
               {newPromo.type === 'PERCENT' ? (
                 <div><label className="text-[10px] uppercase font-bold text-zinc-500 mb-2 block tracking-widest">Max Discount (₹)</label><input type="number" placeholder="e.g. 100" required className={inputStyle} value={newPromo.maxDiscount} onChange={e => setNewPromo({...newPromo, maxDiscount: e.target.value})} /></div>
               ) : ( <div className="hidden md:block"></div> )}
-              
               <div><label className="text-[10px] uppercase font-bold text-zinc-500 mb-2 block tracking-widest">Min Order Value (₹)</label><input type="number" placeholder="e.g. 299" required className={inputStyle} value={newPromo.minOrder} onChange={e => setNewPromo({...newPromo, minOrder: e.target.value})} /></div>
-              
               <div className="sm:col-span-full flex gap-3 mt-4">
                 <button type="submit" className={`flex-1 ${btnPrimary}`}>{editPromoId ? 'Update Coupon' : 'Launch Coupon'}</button>
                 {editPromoId && <button type="button" onClick={() => {setEditPromoId(null); setNewPromo({ code: '', type: 'FLAT', value: '', maxDiscount: '', minOrder: '', isActive: true });}} className="bg-zinc-800 text-white font-bold py-3 px-6 rounded-xl hover:bg-zinc-700 transition-all duration-300">Cancel</button>}
@@ -340,7 +316,6 @@ export default function AdminPanel() {
                       <button onClick={() => remove(ref(db, `promo_codes/${p.id}`))} className="text-rose-500 hover:text-white bg-rose-500/10 hover:bg-rose-500 p-2.5 rounded-xl transition-all duration-300"><Trash2 className="w-4 h-4"/></button>
                     </div>
                   </div>
-                  
                   <button 
                     onClick={() => togglePromoStatus(p.id, p.isActive === false ? false : true)} 
                     className={`w-full py-3 rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all duration-300 ${p.isActive === false ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700' : 'bg-green-500/10 text-green-500 hover:bg-green-500/20'}`}
@@ -471,7 +446,7 @@ export default function AdminPanel() {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {mealPassPlans.map(p => (
-                  <div key={p.id} className={`${cardStyle} p-6 flex flex-col justify-between`}>
+                  <div key={p.id} className={`${cardStyle} p-6 flex flex-col justify-between hover:shadow-orange-500/10 transition-shadow duration-300`}>
                     <div>
                       <div className="flex justify-between items-start mb-3"><div className="text-white font-bold text-xl">{p.name}</div><div className="text-orange-500 font-black text-xl">₹{p.price}</div></div>
                       <div className="text-xs text-zinc-400 mb-5 font-medium bg-zinc-900 inline-block px-3 py-1 rounded-md border border-zinc-800">{p.duration}</div>
@@ -538,11 +513,23 @@ export default function AdminPanel() {
                   <option value="">Select Category</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                 </select>
                 <input placeholder="Drive Link or Image URL" className={inputStyle} value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
+                <textarea placeholder="Description (Optional)" className={`md:col-span-2 resize-none h-24 ${inputStyle}`} value={newItem.description || ''} onChange={e => setNewItem({...newItem, description: e.target.value})} />
                 <button type="submit" className={`w-full md:col-span-2 mt-2 ${btnPrimary}`}>{editId ? 'Update Item' : 'Add to Menu'}</button>
              </form>
              
+             <div className="flex justify-between items-center bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800/80">
+               <div className="text-white font-bold flex items-center gap-2"><Utensils className="w-5 h-5 text-orange-500"/> Total Items: {menuItems.length}</div>
+               <div className="flex items-center gap-3">
+                 <Filter className="w-4 h-4 text-zinc-500"/>
+                 <select className="bg-zinc-950 border border-zinc-800 text-white p-2.5 rounded-xl text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer" value={adminCategoryFilter} onChange={(e) => setAdminCategoryFilter(e.target.value)}>
+                   <option value="All">All Categories</option>
+                   {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                 </select>
+               </div>
+             </div>
+
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-               {menuItems.map(m => (
+               {menuItems.filter(m => adminCategoryFilter === 'All' || m.category === adminCategoryFilter).map(m => (
                  <div key={m.id} className={`${cardStyle} p-4 pr-5 flex justify-between items-center group ${!m.inStock && 'opacity-60 border-red-500/20'}`}>
                    <div className="flex items-center gap-4 truncate pr-4">
                      <div className="relative flex-shrink-0 bg-zinc-950 rounded-2xl overflow-hidden flex items-center justify-center w-14 h-14 border border-zinc-800">
@@ -580,7 +567,7 @@ export default function AdminPanel() {
                <h4 className="text-white font-extrabold mb-5 flex items-center gap-3 text-lg"><Download className="w-5 h-5 text-orange-500"/> Instructions</h4>
                <ul className="space-y-3 text-zinc-400 font-medium text-sm pl-8 list-decimal">
                  <li>Download the template below first.</li>
-                 <li>Do not change column names (name, price, category).</li>
+                 <li>Do not change column names (name, price, category, description).</li>
                  <li>Paste direct Google Drive link in image column.</li>
                  <li>New Categories will be auto-created if they don't exist.</li>
                </ul>
@@ -589,7 +576,7 @@ export default function AdminPanel() {
           </div>
         )}
 
-        {/* SETTINGS */}
+        {/* ✅ SETTINGS WITH DELIVERY ON/OFF TOGGLE */}
         {tab === 'settings' && (
           <div className={`max-w-2xl mx-auto ${cardStyle} p-8 sm:p-12 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out`}>
              <div className="flex items-center gap-3 mb-8 border-b border-zinc-800/50 pb-6">
@@ -598,11 +585,16 @@ export default function AdminPanel() {
              </div>
              
              <div className="grid grid-cols-2 gap-4 bg-zinc-950/50 p-6 rounded-2xl border border-zinc-800/80 mb-6">
-               <h4 className="col-span-2 text-sm font-bold text-white uppercase tracking-widest border-b border-zinc-800 pb-3 mb-2">Delivery Logic</h4>
+               <div className="col-span-2 flex justify-between items-center border-b border-zinc-800 pb-3 mb-2">
+                 <h4 className="text-sm font-bold text-white uppercase tracking-widest">Delivery Logic</h4>
+                 <button type="button" onClick={() => setContactDetails(prev => ({...prev, isDeliveryActive: prev.isDeliveryActive === false ? true : false}))} className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all duration-300 ${contactDetails.isDeliveryActive !== false ? 'bg-green-500/20 text-green-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                   {contactDetails.isDeliveryActive !== false ? 'Delivery Active' : 'Delivery Free (OFF)'}
+                 </button>
+               </div>
                <div><label className="text-[10px] uppercase font-bold text-zinc-500 mb-2 block tracking-widest">Base Charge (₹)</label>
-               <input type="number" className={inputStyle} value={contactDetails.deliveryCharge !== undefined ? contactDetails.deliveryCharge : 30} onChange={e => setContactDetails(prev => ({...prev, deliveryCharge: e.target.value}))} /></div>
+               <input type="number" className={inputStyle} value={contactDetails.deliveryCharge !== undefined ? contactDetails.deliveryCharge : 30} onChange={e => setContactDetails(prev => ({...prev, deliveryCharge: e.target.value}))} disabled={contactDetails.isDeliveryActive === false} /></div>
                <div><label className="text-[10px] uppercase font-bold text-zinc-500 mb-2 block tracking-widest">Free Above (₹)</label>
-               <input type="number" className={inputStyle} value={contactDetails.freeDeliveryThreshold !== undefined ? contactDetails.freeDeliveryThreshold : 299} onChange={e => setContactDetails(prev => ({...prev, freeDeliveryThreshold: e.target.value}))} /></div>
+               <input type="number" className={inputStyle} value={contactDetails.freeDeliveryThreshold !== undefined ? contactDetails.freeDeliveryThreshold : 299} onChange={e => setContactDetails(prev => ({...prev, freeDeliveryThreshold: e.target.value}))} disabled={contactDetails.isDeliveryActive === false} /></div>
              </div>
 
              <div><label className="text-[10px] uppercase font-bold text-zinc-500 mb-2 block tracking-widest">WhatsApp Number</label><input className={inputStyle} value={contactDetails?.phone || ''} onChange={e => setContactDetails(prev => ({...prev, phone: e.target.value}))} /></div>
