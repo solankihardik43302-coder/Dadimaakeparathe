@@ -34,6 +34,9 @@ export default function UserApp() {
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [discountAmt, setDiscountAmt] = useState(0);
 
+  // ✅ NEW: Expanded descriptions state
+  const [expandedItems, setExpandedItems] = useState({});
+
   useEffect(() => {
     onValue(ref(db, 'menu'), snap => setMenuItems(snap.val() ? Object.entries(snap.val()).map(([id, x]) => ({ ...x, id })) : []));
     onValue(ref(db, 'categories'), snap => setCategories(snap.val() ? Object.entries(snap.val()).map(([id, x]) => ({ ...x, id })) : []));
@@ -52,6 +55,11 @@ export default function UserApp() {
 
   const updateQuantity = (cartItemId, delta) => {
     setCart(prev => prev.map(item => item.cartItemId === cartItemId ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item));
+  };
+
+  // ✅ Function to toggle description
+  const toggleDescription = (id) => {
+    setExpandedItems(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
   const applyPromo = (codeToApply = promoInput) => {
@@ -298,14 +306,27 @@ export default function UserApp() {
                 <div key={item.id} className={`bg-white rounded-[2rem] border border-zinc-100/80 p-3 sm:p-4 flex flex-col shadow-sm hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] hover:-translate-y-1.5 transition-all duration-500 ease-out group ${!item.inStock && 'opacity-60'}`}>
                   <div className="relative overflow-hidden rounded-[1.5rem] bg-zinc-100 aspect-[4/3] mb-4">
                     <img src={item.image || '/logo.png'} className={`w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-in-out ${!item.inStock && 'grayscale'}`} alt={item.name} onError={(e) => { e.target.src = '/logo.png'; }}/>
-                    {!item.inStock && <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center"><span className="bg-red-500 text-white font-bold px-4 py-1.5 rounded-xl uppercase tracking-widest text-xs shadow-lg">Sold Out</span></div>}
+                    {!item.inStock && <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center z-10"><span className="bg-red-500 text-white font-bold px-4 py-1.5 rounded-xl uppercase tracking-widest text-xs shadow-lg">Sold Out</span></div>}
                   </div>
                   <div className="px-2 pb-2 flex flex-col flex-grow">
                     <div className="flex justify-between items-start gap-4 mb-2">
                       <h3 className="font-bold text-xl text-zinc-800 leading-snug group-hover:text-orange-600 transition-colors duration-300">{item.name}</h3>
                       <span className="text-orange-600 font-extrabold text-xl shrink-0">₹{item.price}</span>
                     </div>
-                    {item.description && <p className="text-sm text-zinc-500 font-medium leading-relaxed line-clamp-2 mb-6">{item.description}</p>}
+
+                    {/* ✅ READ MORE FEATURE APPLIED HERE */}
+                    {item.description && (
+                      <div className="mb-6">
+                        <p className={`text-sm text-zinc-500 font-medium leading-relaxed ${expandedItems[item.id] ? '' : 'line-clamp-2'}`}>
+                          {item.description}
+                        </p>
+                        {item.description.length > 50 && (
+                          <button onClick={() => toggleDescription(item.id)} className="text-orange-600 text-xs font-bold mt-1 hover:underline">
+                            {expandedItems[item.id] ? 'Show Less' : 'Read More...'}
+                          </button>
+                        )}
+                      </div>
+                    )}
                     
                     <div className="mt-auto">
                       <button disabled={!item.inStock} onClick={() => { setCart(prev => { const existing = prev.find(p => p.id === item.id); if(existing){ return prev.map(p => p.id === item.id ? {...p, quantity: p.quantity + 1} : p); } return [...prev, { ...item, cartItemId: Date.now(), quantity: 1 }]; }); setIsCartOpen(true); }} className={`w-full py-3.5 rounded-xl font-bold text-sm sm:text-base transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 ${item.inStock ? 'bg-orange-50 text-orange-600 hover:bg-gradient-to-r hover:from-orange-600 hover:to-orange-500 hover:text-white hover:shadow-md hover:shadow-orange-500/20' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>
@@ -353,7 +374,7 @@ export default function UserApp() {
                      else if(order.status === 'Delivered') { badgeStyle = 'bg-green-50 text-green-600 border-green-200'; StatusIcon = CheckCircle; }
 
                      return (
-                       <div key={order.id} className="bg-white p-6 sm:p-8 rounded-[2rem] border border-zinc-100/80 shadow-sm hover:shadow-lg transition-shadow duration-300 relative overflow-hidden">
+                       <div key={order.id} className="bg-white p-6 sm:p-8 rounded-[2rem] border border-zinc-100/80 shadow-sm hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] transition-all duration-300 relative overflow-hidden">
                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-zinc-100 pb-6">
                            <div>
                              <div className="text-sm text-zinc-400 font-medium font-mono mb-1">{order.date} • {order.time}</div>
@@ -423,19 +444,19 @@ export default function UserApp() {
                      </div>
                   )) : (
                      <>
-                       <div className="bg-white p-8 sm:p-10 rounded-[2.5rem] border border-zinc-100 shadow-lg hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 ease-out flex flex-col relative overflow-hidden">
-                         <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl"></div>
+                       <div className="bg-white p-8 sm:p-10 rounded-[2.5rem] border border-zinc-100 shadow-lg hover:shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] hover:-translate-y-2 transition-all duration-500 ease-out flex flex-col relative overflow-hidden group">
+                         <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl group-hover:bg-orange-500/10 transition-colors"></div>
                          <span className="text-orange-600 font-bold uppercase tracking-widest text-[10px] sm:text-xs mb-4">Standard Pass</span>
                          <div className="text-4xl sm:text-5xl font-extrabold mb-8 text-zinc-900">₹2,499<span className="text-lg sm:text-xl text-zinc-400 font-medium">/30 Days</span></div>
                          <ul className="mb-8 space-y-3 text-sm text-zinc-600 font-medium">
                            <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500"/> 1 Meal Every Day</li>
                            <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500"/> Free Delivery</li>
                          </ul>
-                         <button onClick={() => handleSubscribe('Standard Pass')} className="w-full py-4 bg-orange-50 text-orange-600 rounded-2xl font-bold hover:bg-orange-600 hover:text-white active:scale-95 transition-all duration-300 mt-auto text-sm sm:text-base">Subscribe Now</button>
+                         <button onClick={() => handleSubscribe('Standard Pass')} className="w-full py-4 bg-orange-50 text-orange-600 rounded-2xl font-bold hover:bg-orange-600 hover:text-white active:scale-95 transition-all duration-300 mt-auto text-sm sm:text-base relative z-10">Subscribe Now</button>
                        </div>
                        
-                       <div className="bg-gradient-to-br from-zinc-900 to-black text-white p-8 sm:p-10 rounded-[2.5rem] border border-zinc-800 shadow-2xl hover:shadow-[0_20px_50px_-12px_rgba(249,115,22,0.25)] hover:-translate-y-2 transition-all duration-500 ease-out flex flex-col relative overflow-hidden ring-1 ring-white/10 hover:ring-orange-500/50">
-                         <div className="absolute top-0 right-0 w-40 h-40 bg-orange-500/20 rounded-full blur-3xl"></div>
+                       <div className="bg-gradient-to-br from-zinc-900 to-black text-white p-8 sm:p-10 rounded-[2.5rem] border border-zinc-800 shadow-2xl hover:shadow-[0_20px_50px_-12px_rgba(249,115,22,0.25)] hover:-translate-y-2 transition-all duration-500 ease-out flex flex-col relative overflow-hidden ring-1 ring-white/10 hover:ring-orange-500/50 group">
+                         <div className="absolute top-0 right-0 w-40 h-40 bg-orange-500/20 rounded-full blur-3xl group-hover:bg-orange-500/30 transition-colors"></div>
                          <span className="text-orange-400 font-bold uppercase tracking-widest text-[10px] sm:text-xs mb-4 flex items-center gap-2"><Flame className="w-4 h-4"/> Heavy Diet Pass</span>
                          <div className="text-4xl sm:text-5xl font-extrabold mb-8 text-white">₹3,999<span className="text-lg sm:text-xl text-zinc-500 font-medium">/30 Days</span></div>
                          <ul className="mb-8 space-y-3 text-sm text-zinc-400 font-medium">
@@ -443,7 +464,7 @@ export default function UserApp() {
                            <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-orange-500"/> Sunday Special Included</li>
                            <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-orange-500"/> Priority Support</li>
                          </ul>
-                         <button onClick={() => handleSubscribe('Heavy Diet Pass')} className="w-full py-4 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-2xl font-bold hover:shadow-lg hover:shadow-orange-900/50 active:scale-95 transition-all duration-300 mt-auto text-sm sm:text-base">Get Premium Pass</button>
+                         <button onClick={() => handleSubscribe('Heavy Diet Pass')} className="w-full py-4 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-2xl font-bold hover:shadow-lg hover:shadow-orange-900/50 active:scale-95 transition-all duration-300 mt-auto text-sm sm:text-base relative z-10">Get Premium Pass</button>
                        </div>
                      </>
                   )}
@@ -554,16 +575,16 @@ export default function UserApp() {
           <div>
             <h4 className="text-white font-bold mb-6 uppercase tracking-widest text-xs">Find Us</h4>
             <div className="rounded-3xl overflow-hidden h-40 border border-zinc-800 opacity-80 hover:opacity-100 transition-all duration-500 shadow-lg shadow-black">
-             <iframe 
-  title="Dadi Maa Ke Parathe Location"
-  width="100%" 
-  height="100%" 
-  style={{ border: 0 }}
-  src={`https://maps.google.com/maps?q=${encodeURIComponent('Dadi Maa Ke Parathe, ' + (contactDetails.address || 'Indore'))}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-  allowFullScreen=""
-  loading="lazy"
-  referrerPolicy="no-referrer-when-downgrade"
-></iframe>
+              <iframe 
+                title="Dadi Maa Ke Parathe Location"
+                width="100%" 
+                height="100%" 
+                style={{ border: 0 }}
+                src={`https://maps.google.com/maps?q=${encodeURIComponent('Dadi Maa Ke Parathe, ' + (contactDetails.address || 'Indore'))}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                allowFullScreen=""
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              ></iframe>
             </div>
           </div>
 
@@ -571,8 +592,8 @@ export default function UserApp() {
 
         <div className="max-w-6xl mx-auto mt-16 pt-8 border-t border-zinc-800/50 text-xs text-center sm:text-left flex flex-col sm:flex-row justify-between items-center gap-6">
           <p className="font-medium text-zinc-500">© {new Date().getFullYear()} Dadi Maa Ke Parathe. All rights reserved.</p>
-          <a href="https://instagram.com/axiomdesignsco" target="_blank" rel="noopener noreferrer" className="bg-zinc-900/50 px-5 py-2.5 rounded-full border border-zinc-800 font-medium hover:border-zinc-700 hover:bg-zinc-900 transition-all duration-300 cursor-pointer group">
-            Designed with <Heart className="w-3 h-3 inline text-rose-500 fill-rose-500 mx-1 group-hover:scale-110 transition-transform"/> by <span className="font-bold text-white tracking-widest uppercase text-[10px]">Hardik Solanki.</span>
+          <a href="#" target="_blank" rel="noopener noreferrer" className="bg-zinc-900/50 px-5 py-2.5 rounded-full border border-zinc-800 font-medium hover:border-zinc-700 hover:bg-zinc-900 transition-all duration-300 cursor-pointer group">
+            Designed with <Heart className="w-3 h-3 inline text-rose-500 fill-rose-500 mx-1 group-hover:scale-110 transition-transform"/> by <span className="font-bold text-white tracking-widest uppercase text-[10px]">Hardik Solanki</span>
           </a>
         </div>
       </footer>
@@ -607,7 +628,7 @@ export default function UserApp() {
         </div>
       )}
 
-      {/* 🚀 PREMIUM CART DRAWER */}
+      {/* CART DRAWER */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm transition-opacity duration-500 ease-out" onClick={() => setIsCartOpen(false)}></div>
