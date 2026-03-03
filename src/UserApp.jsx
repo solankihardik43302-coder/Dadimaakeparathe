@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShoppingBag, ArrowRight, Plus, Minus, Heart, Flame,
   LogOut, CheckCircle, Utensils, MapPin, Instagram, X, Users, ShieldCheck, Mail, Phone, Quote, 
-  Trash2, Ticket, Bike, Receipt, Clock, Package
+  Trash2, Ticket, Bike, Receipt, Clock, Package, Star, MessageSquare
 } from 'lucide-react';
 import { db } from "./firebase";
 import { ref, onValue, push, set, get } from "firebase/database";
@@ -15,10 +15,11 @@ export default function UserApp() {
   const [mealPassPlans, setMealPassPlans] = useState([]); 
   const [allOrders, setAllOrders] = useState([]);
   const [availablePromos, setAvailablePromos] = useState([]);
+  const [allFeedbacks, setAllFeedbacks] = useState([]); 
   
   const [contactDetails, setContactDetails] = useState({ 
-    phone: '', email: '', logo: '/logo.png', address: '', instagram: '',
-    deliveryCharge: 30, freeDeliveryThreshold: 299
+    phone: '', landline: '', email: '', logo: '/logo.png', address: '', instagram: '',
+    deliveryCharge: 30, freeDeliveryThreshold: 299, isDeliveryActive: true
   });
   
   const [currentUser, setCurrentUser] = useState(null);
@@ -34,8 +35,9 @@ export default function UserApp() {
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [discountAmt, setDiscountAmt] = useState(0);
 
-  // ✅ NEW: Expanded descriptions state
   const [expandedItems, setExpandedItems] = useState({});
+  const [reviewModalData, setReviewModalData] = useState(null); 
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
 
   useEffect(() => {
     onValue(ref(db, 'menu'), snap => setMenuItems(snap.val() ? Object.entries(snap.val()).map(([id, x]) => ({ ...x, id })) : []));
@@ -45,43 +47,52 @@ export default function UserApp() {
     onValue(ref(db, 'meal_passes'), snap => setAllPasses(snap.val() ? Object.entries(snap.val()).map(([id, x]) => ({ ...x, id })) : []));
     onValue(ref(db, 'orders'), snap => setAllOrders(snap.val() ? Object.entries(snap.val()).map(([id, x]) => ({ ...x, id })).reverse() : []));
     onValue(ref(db, 'promo_codes'), snap => setAvailablePromos(snap.val() ? Object.values(snap.val()) : []));
+    onValue(ref(db, 'feedbacks'), snap => setAllFeedbacks(snap.val() ? Object.values(snap.val()) : []));
   }, []);
 
   const cartSubTotal = (cart || []).reduce((sum, item) => sum + ((Number(item?.price) || 0) * (Number(item?.quantity) || 1)), 0);
   const dCharge = contactDetails.deliveryCharge !== undefined ? Number(contactDetails.deliveryCharge) : 30;
   const dThreshold = contactDetails.freeDeliveryThreshold !== undefined ? Number(contactDetails.freeDeliveryThreshold) : 299;
-  const deliveryCharge = (cartSubTotal > 0 && cartSubTotal < dThreshold) ? dCharge : 0; 
+  const isDeliveryPossible = contactDetails.isDeliveryActive !== false;
+  const deliveryCharge = (isDeliveryPossible && cartSubTotal > 0 && cartSubTotal < dThreshold) ? dCharge : 0; 
   const cartGrandTotal = Math.max(0, cartSubTotal + deliveryCharge - discountAmt);
 
   const updateQuantity = (cartItemId, delta) => {
     setCart(prev => prev.map(item => item.cartItemId === cartItemId ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item));
   };
 
-  // ✅ Function to toggle description
   const toggleDescription = (id) => {
     setExpandedItems(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const submitReview = (e) => {
+    e.preventDefault();
+    if (!currentUser) { setReviewModalData(null); setShowAuthModal(true); return; }
+    if (!reviewForm.comment) return alert("Please write a review.");
+    
+    push(ref(db, 'feedbacks'), {
+      itemId: reviewModalData.item.id, itemName: reviewModalData.item.name,
+      userId: currentUser.id, userName: currentUser.name, rating: reviewForm.rating, comment: reviewForm.comment, timestamp: new Date().toISOString()
+    }).then(() => {
+      alert("Review submitted successfully!");
+      setReviewForm({ rating: 5, comment: '' }); setReviewModalData(null);
+    });
   };
 
   const applyPromo = (codeToApply = promoInput) => {
     const code = codeToApply.trim().toUpperCase();
     if (!code) return;
-    
     const validPromo = availablePromos.find(p => p.code === code && p.isActive !== false);
     if (validPromo) {
       if (cartSubTotal < validPromo.minOrder) return alert(`Minimum order of ₹${validPromo.minOrder} is required.`);
-      
       let calcDiscount = 0;
       if (validPromo.type === 'PERCENT') {
         calcDiscount = (cartSubTotal * validPromo.value) / 100;
         if (validPromo.maxDiscount && calcDiscount > validPromo.maxDiscount) { calcDiscount = validPromo.maxDiscount; }
       } else { calcDiscount = validPromo.value; }
-
-      setDiscountAmt(Math.floor(calcDiscount));
-      setAppliedPromo(validPromo.code);
-      setPromoInput(validPromo.code);
+      setDiscountAmt(Math.floor(calcDiscount)); setAppliedPromo(validPromo.code); setPromoInput(validPromo.code);
     } else {
-      alert("Invalid or Inactive Promo Code");
-      setPromoInput('');
+      alert("Invalid or Inactive Promo Code"); setPromoInput('');
     }
   };
 
@@ -91,30 +102,21 @@ export default function UserApp() {
     e.preventDefault();
     if (authForm.phone.length !== 10) return alert("Enter 10-digit phone number.");
     const pwdRegex = /^(?=.*[A-Za-z])(?=.*\d).{6,}$/;
-
     if (authMode === 'signup') {
       if (!pwdRegex.test(authForm.password)) return alert("Password: Min 6 chars, letters & numbers.");
       if (authForm.name.trim() === '') return alert("Please enter your name.");
-      
       get(ref(db, 'users')).then(snap => {
         const exists = snap.exists() && Object.values(snap.val()).some(u => u.phone === authForm.phone);
-        if (exists) {
-          alert("Already registered. Please log in.");
-          setAuthMode('login');
-        } else {
-          push(ref(db, 'users'), { ...authForm, createdAt: new Date().toISOString() })
-          .then(res => { setCurrentUser({ ...authForm, id: res.key }); setShowAuthModal(false); });
-        }
+        if (exists) { alert("Already registered. Please log in."); setAuthMode('login'); } 
+        else { push(ref(db, 'users'), { ...authForm, createdAt: new Date().toISOString() }).then(res => { setCurrentUser({ ...authForm, id: res.key }); setShowAuthModal(false); }); }
       });
     } else {
       get(ref(db, 'users')).then(snap => {
         if (!snap.exists()) { setAuthMode('signup'); return; }
         const users = Object.entries(snap.val()).map(([id, val]) => ({ ...val, id }));
         const user = users.find(u => u.phone === authForm.phone);
-        if (user) {
-          if (user.password === authForm.password) { setCurrentUser(user); setShowAuthModal(false); }
-          else alert("Incorrect Password!");
-        } else { setAuthMode('signup'); }
+        if (user) { if (user.password === authForm.password) { setCurrentUser(user); setShowAuthModal(false); } else alert("Incorrect Password!"); } 
+        else { setAuthMode('signup'); }
       });
     }
   };
@@ -129,18 +131,19 @@ export default function UserApp() {
 
   const handleWhatsAppCheckout = () => {
     if (!currentUser) return setShowAuthModal(true);
-    
     push(ref(db, 'orders'), { 
       date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString(), 
       customerName: currentUser.name, customerPhone: currentUser.phone, 
       items: cart, subtotal: cartSubTotal, delivery: deliveryCharge, discount: discountAmt,
-      promoCode: appliedPromo || 'None', total: cartGrandTotal, status: 'Pending' 
+      promoCode: appliedPromo || 'None', total: cartGrandTotal, status: 'Pending',
+      type: 'Online Website', paymentMode: 'Online Check'
     });
 
     let msg = `*New Order - Dadi Maa Ke Parathe*\n`;
     (cart || []).forEach(item => { msg += `\n*${item.quantity}x ${item.name}*`; });
     msg += `\n\n*Subtotal:* ₹${cartSubTotal}`;
-    if (deliveryCharge > 0) msg += `\n*Delivery:* ₹${deliveryCharge}`;
+    if (!isDeliveryPossible) msg += `\n*Mode:* Takeaway / Pickup`;
+    else if (deliveryCharge > 0) msg += `\n*Delivery:* ₹${deliveryCharge}`;
     if (discountAmt > 0) msg += `\n*Discount (${appliedPromo}):* -₹${discountAmt}`;
     msg += `\n*Grand Total:* ₹${cartGrandTotal}\n\nName: ${currentUser.name}`;
     
@@ -154,15 +157,12 @@ export default function UserApp() {
   const calculateDaysLeft = (startDateISO) => {
     if (!startDateISO) return 0;
     const start = new Date(startDateISO).getTime();
-    const now = new Date().getTime();
-    const diff = now - start;
-    const daysPassed = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const daysLeft = 30 - daysPassed; 
+    const diff = new Date().getTime() - start;
+    const daysLeft = 30 - Math.floor(diff / (1000 * 60 * 60 * 24)); 
     return daysLeft > 0 ? daysLeft : 0;
   };
 
-  const userPassesList = currentUser ? allPasses.filter(p => p.phone === currentUser.phone) : [];
-  const myPass = userPassesList.length > 0 ? userPassesList[userPassesList.length - 1] : null; 
+  const myPass = currentUser ? allPasses.filter(p => p.phone === currentUser.phone).pop() : null; 
   const daysRemaining = myPass ? calculateDaysLeft(myPass.startDate) : 0;
   const myOrderHistory = currentUser ? allOrders.filter(o => o.customerPhone === currentUser.phone) : [];
   const instaHandle = contactDetails.instagram ? contactDetails.instagram.replace('@', '') : '';
@@ -170,7 +170,7 @@ export default function UserApp() {
   return (
     <div className="min-h-screen bg-[#FAFAFA] font-sans antialiased text-zinc-800 flex flex-col selection:bg-orange-200 selection:text-orange-900 overflow-x-hidden">
       
-      {/* ---------------- NAVBAR ---------------- */}
+      {/* NAVBAR */}
       <nav className="sticky top-0 z-40 w-full bg-white/70 backdrop-blur-2xl border-b border-zinc-200/50 px-4 py-3 sm:px-6 transition-all duration-300">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center space-x-3 cursor-pointer group" onClick={() => {setCurrentView('home'); window.scrollTo({ top: 0, behavior: 'smooth' });}}>
@@ -196,7 +196,7 @@ export default function UserApp() {
 
           <div className="flex items-center space-x-3 sm:space-x-4">
             {currentUser ? 
-              <button onClick={() => setCurrentUser(null)} className="text-zinc-400 hover:text-rose-500 hover:bg-rose-50 p-2.5 rounded-full transition-all duration-300"><LogOut className="w-5 h-5"/></button> 
+              <button onClick={() => setCurrentUser(null)} className="text-zinc-400 hover:text-rose-500 p-2.5 rounded-full transition-all duration-300 bg-rose-50 hover:bg-rose-100"><LogOut className="w-5 h-5"/></button> 
               : 
               <button onClick={() => setShowAuthModal(true)} className="bg-zinc-900 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-md shadow-zinc-900/20 hover:shadow-lg hover:-translate-y-0.5 active:scale-95 transition-all duration-300">Login</button>
             }
@@ -219,7 +219,7 @@ export default function UserApp() {
         </div>
       </nav>
 
-      {/* ---------------- MAIN CONTENT ---------------- */}
+      {/* MAIN CONTENT */}
       <main className="flex-grow">
         
         {/* HOME VIEW */}
@@ -302,40 +302,83 @@ export default function UserApp() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-              {(menuItems || []).filter(i => selectedCategory === "All" || i.category === selectedCategory).map(item => (
-                <div key={item.id} className={`bg-white rounded-[2rem] border border-zinc-100/80 p-3 sm:p-4 flex flex-col shadow-sm hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] hover:-translate-y-1.5 transition-all duration-500 ease-out group ${!item.inStock && 'opacity-60'}`}>
-                  <div className="relative overflow-hidden rounded-[1.5rem] bg-zinc-100 aspect-[4/3] mb-4">
-                    <img src={item.image || '/logo.png'} className={`w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-in-out ${!item.inStock && 'grayscale'}`} alt={item.name} onError={(e) => { e.target.src = '/logo.png'; }}/>
-                    {!item.inStock && <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center z-10"><span className="bg-red-500 text-white font-bold px-4 py-1.5 rounded-xl uppercase tracking-widest text-xs shadow-lg">Sold Out</span></div>}
-                  </div>
-                  <div className="px-2 pb-2 flex flex-col flex-grow">
-                    <div className="flex justify-between items-start gap-4 mb-2">
-                      <h3 className="font-bold text-xl text-zinc-800 leading-snug group-hover:text-orange-600 transition-colors duration-300">{item.name}</h3>
-                      <span className="text-orange-600 font-extrabold text-xl shrink-0">₹{item.price}</span>
-                    </div>
+              {(menuItems || []).filter(i => selectedCategory === "All" || i.category === selectedCategory).map(item => {
+                // ZOMATO STYLE RATING
+                const itemReviews = allFeedbacks.filter(f => f.itemId === item.id);
+                const avgRating = itemReviews.length > 0 ? (itemReviews.reduce((sum, r) => sum + r.rating, 0) / itemReviews.length).toFixed(1) : 'NEW';
 
-                    {/* ✅ READ MORE FEATURE APPLIED HERE */}
-                    {item.description && (
-                      <div className="mb-6">
-                        <p className={`text-sm text-zinc-500 font-medium leading-relaxed ${expandedItems[item.id] ? '' : 'line-clamp-2'}`}>
-                          {item.description}
-                        </p>
-                        {item.description.length > 50 && (
-                          <button onClick={() => toggleDescription(item.id)} className="text-orange-600 text-xs font-bold mt-1 hover:underline">
-                            {expandedItems[item.id] ? 'Show Less' : 'Read More...'}
-                          </button>
-                        )}
+                return (
+                  <div key={item.id} className={`bg-white rounded-[2rem] border border-zinc-100/80 p-3 sm:p-4 flex flex-col shadow-sm hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] hover:-translate-y-1.5 transition-all duration-500 ease-out group ${!item.inStock && 'opacity-60'}`}>
+                    <div className="relative overflow-hidden rounded-[1.5rem] bg-zinc-100 aspect-[4/3] mb-4">
+                      <img src={item.image || '/logo.png'} className={`w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-in-out ${!item.inStock && 'grayscale'}`} alt={item.name} onError={(e) => { e.target.src = '/logo.png'; }}/>
+                      {!item.inStock && <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center z-10"><span className="bg-red-500 text-white font-bold px-4 py-1.5 rounded-xl uppercase tracking-widest text-xs shadow-lg">Sold Out</span></div>}
+                    </div>
+                    <div className="px-2 pb-2 flex flex-col flex-grow">
+                      <div className="flex justify-between items-start gap-4 mb-1">
+                        <h3 className="font-bold text-xl text-zinc-800 leading-snug group-hover:text-orange-600 transition-colors duration-300">{item.name}</h3>
+                        <span className="text-orange-600 font-extrabold text-xl shrink-0">₹{item.price}</span>
                       </div>
-                    )}
-                    
-                    <div className="mt-auto">
-                      <button disabled={!item.inStock} onClick={() => { setCart(prev => { const existing = prev.find(p => p.id === item.id); if(existing){ return prev.map(p => p.id === item.id ? {...p, quantity: p.quantity + 1} : p); } return [...prev, { ...item, cartItemId: Date.now(), quantity: 1 }]; }); setIsCartOpen(true); }} className={`w-full py-3.5 rounded-xl font-bold text-sm sm:text-base transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 ${item.inStock ? 'bg-orange-50 text-orange-600 hover:bg-gradient-to-r hover:from-orange-600 hover:to-orange-500 hover:text-white hover:shadow-md hover:shadow-orange-500/20' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>
-                        {item.inStock ? <><Plus className="w-4 h-4"/> Add to Order</> : 'Unavailable'}
-                      </button>
+
+                      {/* ZOMATO STYLE BADGE */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <button onClick={() => { setShowFeedbackModal(true); setReviewModalData({ item, reviews: itemReviews }); setFeedbackForm({...feedbackForm, itemName: item.name, itemId: item.id}); }} className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-bold text-white shadow-sm transition-all hover:scale-105 active:scale-95 ${avgRating === 'NEW' ? 'bg-zinc-400' : 'bg-green-700'}`}>
+                          {avgRating} {avgRating !== 'NEW' && <Star className="w-3 h-3 fill-white text-white"/>}
+                        </button>
+                        {itemReviews.length > 0 && <span className="text-xs text-zinc-500 font-medium">{itemReviews.length} ratings</span>}
+                      </div>
+
+                      {item.description && (
+                        <div className="mb-6">
+                          <p className={`text-sm text-zinc-500 font-medium leading-relaxed ${expandedItems[item.id] ? '' : 'line-clamp-2'}`}>{item.description}</p>
+                          {item.description.length > 60 && (<button onClick={() => toggleDescription(item.id)} className="text-orange-600 text-xs font-bold mt-1 hover:underline">{expandedItems[item.id] ? 'Show Less' : 'Read More...'}</button>)}
+                        </div>
+                      )}
+                      
+                      <div className="mt-auto">
+                        <button disabled={!item.inStock} onClick={() => { setCart(prev => { const existing = prev.find(p => p.id === item.id); if(existing){ return prev.map(p => p.id === item.id ? {...p, quantity: p.quantity + 1} : p); } return [...prev, { ...item, cartItemId: Date.now(), quantity: 1 }]; }); setIsCartOpen(true); }} className={`w-full py-3.5 rounded-xl font-bold text-sm sm:text-base transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 ${item.inStock ? 'bg-orange-50 text-orange-600 hover:bg-gradient-to-r hover:from-orange-600 hover:to-orange-500 hover:text-white hover:shadow-md hover:shadow-orange-500/20' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>
+                          {item.inStock ? <><Plus className="w-4 h-4"/> Add to Order</> : 'Unavailable'}
+                        </button>
+                      </div>
                     </div>
                   </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ZOMATO STYLE REVIEWS MODAL */}
+        {reviewModalData && (
+          <div className="fixed inset-0 z-[100] flex justify-center items-end sm:items-center p-0 sm:p-4 bg-zinc-900/60 backdrop-blur-sm">
+            <div className="bg-white w-full sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-full sm:zoom-in-95">
+              <div className="p-6 border-b flex justify-between items-center">
+                <div>
+                  <h3 className="font-bold text-xl text-zinc-900">{reviewModalData.item.name}</h3>
+                  <p className="text-xs text-zinc-500 font-medium">Customer Reviews</p>
                 </div>
-              ))}
+                <X className="cursor-pointer bg-zinc-100 p-2 rounded-full w-8 h-8 text-zinc-500 hover:bg-zinc-200" onClick={() => setReviewModalData(null)} />
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-zinc-50/50">
+                 {reviewModalData.reviews.length === 0 && <div className="text-center text-zinc-400 py-10"><MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-20"/><p className="text-sm font-medium">No reviews yet. Be the first to rate!</p></div>}
+                 {reviewModalData.reviews.map(r => (
+                   <div key={r.id} className="bg-white p-4 rounded-xl border border-zinc-100 shadow-sm">
+                     <div className="flex justify-between items-start mb-2">
+                       <span className="font-bold text-sm text-zinc-800">{r.userName}</span>
+                       <div className="bg-green-600 text-white px-1.5 py-0.5 rounded flex items-center gap-0.5 text-[10px] font-bold">{r.rating} <Star size={10} fill="currentColor"/></div>
+                     </div>
+                     <p className="text-sm text-zinc-600 font-medium leading-relaxed">{r.comment}</p>
+                     <div className="text-[10px] text-zinc-400 mt-3 font-medium">{new Date(r.timestamp).toLocaleDateString()}</div>
+                   </div>
+                 ))}
+              </div>
+              <div className="p-6 border-t bg-white rounded-b-[2rem]">
+                <h4 className="font-bold text-sm mb-3 text-zinc-800">Add Your Review</h4>
+                <div className="flex gap-2 mb-4">
+                   {[1,2,3,4,5].map(s => (<Star key={s} size={28} onClick={() => setFeedbackForm({...feedbackForm, rating: s})} className={`cursor-pointer transition-colors ${feedbackForm.rating >= s ? 'text-yellow-500 fill-yellow-500' : 'text-zinc-200 fill-zinc-200'}`} />))}
+                </div>
+                <textarea placeholder="Write your experience..." className="w-full bg-zinc-50 border border-zinc-200 p-3 rounded-xl text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 mb-3 resize-none" rows="2" value={feedbackForm.comment} onChange={e => setFeedbackForm({...feedbackForm, comment: e.target.value})}></textarea>
+                <button onClick={handleFeedbackSubmit} className="w-full bg-orange-600 text-white font-bold py-3.5 rounded-xl hover:bg-orange-500 active:scale-[0.98] transition-all">Submit Review</button>
+              </div>
             </div>
           </div>
         )}
@@ -474,7 +517,7 @@ export default function UserApp() {
           </div>
         )}
 
-        {/* ABOUT VIEW */}
+        {/* ABOUT VIEW (WITH LANDLINE FORMAT) */}
         {currentView === 'about' && (
           <div className="max-w-4xl mx-auto px-4 sm:px-6 py-12 sm:py-20 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
             <h2 className="text-4xl sm:text-5xl font-extrabold mb-12 text-center text-zinc-900 tracking-tight">Our Story</h2>
@@ -506,7 +549,12 @@ export default function UserApp() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <a href={`tel:${contactDetails.phone}`} className="bg-white p-6 rounded-[2rem] border border-zinc-100 flex items-center gap-5 hover:border-orange-300 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer group">
                 <div className="bg-orange-50 p-4 rounded-2xl group-hover:bg-orange-500 transition-colors duration-300"><Phone className="w-6 h-6 text-orange-600 group-hover:text-white transition-colors duration-300"/></div>
-                <div><div className="text-xs text-zinc-500 font-bold uppercase tracking-widest mb-1">Call Us</div><div className="font-bold text-zinc-900 text-lg">{contactDetails.phone}</div></div>
+                <div>
+                  <div className="text-xs text-zinc-500 font-bold uppercase tracking-widest mb-1">Call Us</div>
+                  <div className="font-bold text-zinc-900 text-lg">{contactDetails.phone}</div>
+                  {/* ✅ PROFESSIONAL LANDLINE FORMAT */}
+                  {contactDetails.landline && <div className="font-bold text-zinc-600 text-sm mt-0.5"><span className="font-medium text-zinc-400 text-xs">Landline:</span> {contactDetails.landline}</div>}
+                </div>
               </a>
               <a href={`mailto:${contactDetails.email || 'hello@dadimaa.com'}`} className="bg-white p-6 rounded-[2rem] border border-zinc-100 flex items-center gap-5 hover:border-orange-300 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer group">
                 <div className="bg-orange-50 p-4 rounded-2xl group-hover:bg-orange-500 transition-colors duration-300"><Mail className="w-6 h-6 text-orange-600 group-hover:text-white transition-colors duration-300"/></div>
@@ -525,7 +573,7 @@ export default function UserApp() {
         )}
       </main>
 
-      {/* FOOTER */}
+      {/* EXACT ORIGINAL FOOTER + PROFESSIONAL LANDLINE */}
       <footer className="bg-zinc-950 text-zinc-400 py-16 px-6 mt-auto">
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
           
@@ -555,7 +603,11 @@ export default function UserApp() {
             <ul className="space-y-5 text-sm font-medium">
               <li className="flex items-center gap-4">
                 <div className="bg-zinc-900 p-2.5 rounded-xl"><Phone className="w-4 h-4 text-orange-500"/></div> 
-                <a href={`tel:${contactDetails.phone}`} className="hover:text-orange-500 transition-colors duration-300 cursor-pointer">{contactDetails.phone}</a>
+                <div className="flex flex-col">
+                  <a href={`tel:${contactDetails.phone}`} className="hover:text-orange-500 transition-colors duration-300 cursor-pointer">{contactDetails.phone}</a>
+                  {/* ✅ LANDLINE FORMAT */}
+                  {contactDetails.landline && <a href={`tel:${contactDetails.landline}`} className="hover:text-orange-500 transition-colors duration-300 cursor-pointer text-xs mt-1 text-zinc-500"><span className="uppercase tracking-widest text-[9px] mr-1 opacity-70">Landline</span>{contactDetails.landline}</a>}
+                </div>
               </li>
               <li className="flex items-center gap-4">
                 <div className="bg-zinc-900 p-2.5 rounded-xl"><Mail className="w-4 h-4 text-orange-500"/></div> 
@@ -598,37 +650,7 @@ export default function UserApp() {
         </div>
       </footer>
 
-      {/* MODALS */}
-      {showAuthModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-md transition-opacity duration-300">
-          <div className="bg-white p-8 sm:p-10 rounded-[2.5rem] w-full max-w-sm relative animate-in zoom-in-95 duration-500 ease-out shadow-2xl">
-            <X className="absolute top-6 right-6 cursor-pointer text-zinc-400 hover:text-zinc-900 bg-zinc-100 rounded-full p-2 w-10 h-10 transition-colors duration-300" onClick={() => setShowAuthModal(false)}/>
-            <div className="bg-orange-50 w-16 h-16 rounded-full flex items-center justify-center mb-6 shadow-inner">
-              <Users className="w-8 h-8 text-orange-600"/>
-            </div>
-            <h3 className="text-3xl font-extrabold mb-2 text-zinc-900 tracking-tight">{authMode === 'login' ? 'Welcome Back!' : 'Create Account'}</h3>
-            <p className="text-zinc-500 text-sm font-medium mb-8">
-              {authMode === 'login' ? 'Login to track your live orders.' : 'Join the Dadi Maa family today.'}
-            </p>
-            <form onSubmit={handleAuthSubmit} className="space-y-4">
-              {authMode === 'signup' && (
-                <input placeholder="Your Name" required className="w-full bg-zinc-50 border border-zinc-200 p-4 rounded-2xl outline-none focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10 transition-all duration-300 font-medium text-zinc-900" onChange={e => setAuthForm({...authForm, name: e.target.value})} />
-              )}
-              <input type="tel" placeholder="Phone Number (10 digits)" required value={authForm.phone} className="w-full bg-zinc-50 border border-zinc-200 p-4 rounded-2xl outline-none focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10 transition-all duration-300 font-medium text-zinc-900 tracking-wider" onChange={e => { const numbersOnly = e.target.value.replace(/\D/g, '').slice(0, 10); setAuthForm({...authForm, phone: numbersOnly}); }} />
-              <input type="password" placeholder="Password" required className="w-full bg-zinc-50 border border-zinc-200 p-4 rounded-2xl outline-none focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10 transition-all duration-300 font-medium text-zinc-900 tracking-wider" onChange={e => setAuthForm({...authForm, password: e.target.value})} />
-              {authMode === 'signup' && <p className="text-[10px] text-zinc-400 font-medium px-2 mt-1">Min 6 characters, combining letters & numbers.</p>}
-              <button type="submit" className="w-full bg-gradient-to-r from-orange-600 to-orange-500 text-white py-4 rounded-2xl font-bold text-lg hover:shadow-[0_8px_30px_-8px_rgba(249,115,22,0.4)] active:scale-95 transition-all duration-300 mt-4">
-                {authMode === 'login' ? 'Login Securely' : 'Create My Account'}
-              </button>
-            </form>
-            <button onClick={() => setAuthMode(authMode==='login'?'signup':'login')} className="w-full text-center mt-8 text-zinc-500 text-sm font-medium hover:text-zinc-900 transition-colors duration-300">
-              {authMode==='login' ? 'Don\'t have an account? ' : 'Already have an account? '}<span className="text-orange-600 font-bold underline decoration-orange-200 underline-offset-4">Click Here</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* CART DRAWER */}
+      {/* 🚀 PREMIUM CART DRAWER */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm transition-opacity duration-500 ease-out" onClick={() => setIsCartOpen(false)}></div>
@@ -641,6 +663,17 @@ export default function UserApp() {
              
              <div className="flex-1 overflow-y-auto px-6 sm:px-8 py-4 space-y-6 scrollbar-hide">
                 
+                {/* DELIVERY OFF MESSAGE */}
+                {!isDeliveryPossible && (
+                  <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl flex items-center gap-3">
+                    <div className="bg-rose-100 p-2 rounded-full"><MapPin className="w-5 h-5 text-rose-500"/></div>
+                    <div>
+                      <div className="text-rose-700 font-bold text-sm">Takeaway Only</div>
+                      <div className="text-rose-600 text-xs font-medium">Delivery is currently unavailable.</div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   {(cart || []).map(item => (
                     <div key={item.cartItemId} className="flex flex-col border border-zinc-100/80 p-4 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 bg-white">
@@ -726,11 +759,11 @@ export default function UserApp() {
                       </div>
                       
                       <div className="flex justify-between text-sm font-medium text-zinc-600 items-center">
-                        <span className="flex items-center gap-1.5 border-b border-dashed border-zinc-300 pb-0.5">Delivery Fee <Bike className="w-3.5 h-3.5"/></span>
-                        {deliveryCharge === 0 ? <span className="text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded border border-green-100">FREE</span> : <span>+ ₹{deliveryCharge}</span>}
+                        <span className="flex items-center gap-1.5 border-b border-dashed border-zinc-300 pb-0.5">Delivery Fee {isDeliveryPossible && <Bike className="w-3.5 h-3.5"/>}</span>
+                        {!isDeliveryPossible ? <span className="text-rose-500 font-bold text-xs bg-rose-50 px-2 py-0.5 rounded border border-rose-100">Takeaway</span> : deliveryCharge === 0 ? <span className="text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded border border-green-100">FREE</span> : <span>+ ₹{deliveryCharge}</span>}
                       </div>
                       
-                      {deliveryCharge > 0 && <div className="text-[10px] text-orange-500 font-medium bg-orange-50 p-2 rounded-lg border border-orange-100">Add items worth ₹{dThreshold - cartSubTotal} more for FREE delivery.</div>}
+                      {isDeliveryPossible && deliveryCharge > 0 && <div className="text-[10px] text-orange-500 font-medium bg-orange-50 p-2 rounded-lg border border-orange-100">Add items worth ₹{dThreshold - cartSubTotal} more for FREE delivery.</div>}
                       
                       {discountAmt > 0 && (
                         <div className="flex justify-between text-sm font-bold text-green-600 pt-2 border-t border-green-100 border-dashed">
@@ -742,9 +775,9 @@ export default function UserApp() {
                         <span>To Pay</span><span>₹{cartGrandTotal}</span>
                       </div>
                       
-                      {(discountAmt > 0 || (deliveryCharge === 0 && cartSubTotal >= dThreshold)) && (
+                      {(discountAmt > 0 || (isDeliveryPossible && deliveryCharge === 0 && cartSubTotal >= dThreshold)) && (
                         <div className="text-right text-[10px] font-bold text-green-600 bg-green-50 p-2 rounded-lg inline-block float-right mt-2 border border-green-100 shadow-sm animate-in fade-in duration-500">
-                          🎉 Total Savings: ₹{discountAmt + (deliveryCharge === 0 && cartSubTotal >= dThreshold ? dCharge : 0)}
+                          🎉 Total Savings: ₹{discountAmt + (isDeliveryPossible && deliveryCharge === 0 && cartSubTotal >= dThreshold ? dCharge : 0)}
                         </div>
                       )}
                     </div>
@@ -763,6 +796,36 @@ export default function UserApp() {
                  </button>
                </div>
              )}
+          </div>
+        </div>
+      )}
+
+      {/* AUTH MODAL */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-md transition-opacity duration-300">
+          <div className="bg-white p-8 sm:p-10 rounded-[2.5rem] w-full max-w-sm relative animate-in zoom-in-95 duration-500 ease-out shadow-2xl">
+            <X className="absolute top-6 right-6 cursor-pointer text-zinc-400 hover:text-zinc-900 bg-zinc-100 rounded-full p-2 w-10 h-10 transition-colors duration-300" onClick={() => setShowAuthModal(false)}/>
+            <div className="bg-orange-50 w-16 h-16 rounded-full flex items-center justify-center mb-6 shadow-inner">
+              <Users className="w-8 h-8 text-orange-600"/>
+            </div>
+            <h3 className="text-3xl font-extrabold mb-2 text-zinc-900 tracking-tight">{authMode === 'login' ? 'Welcome Back!' : 'Create Account'}</h3>
+            <p className="text-zinc-500 text-sm font-medium mb-8">
+              {authMode === 'login' ? 'Login to track your live orders.' : 'Join the Dadi Maa family today.'}
+            </p>
+            <form onSubmit={handleAuthSubmit} className="space-y-4">
+              {authMode === 'signup' && (
+                <input placeholder="Your Name" required className="w-full bg-zinc-50 border border-zinc-200 p-4 rounded-2xl outline-none focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10 transition-all duration-300 font-medium text-zinc-900" onChange={e => setAuthForm({...authForm, name: e.target.value})} />
+              )}
+              <input type="tel" placeholder="Phone Number (10 digits)" required value={authForm.phone} className="w-full bg-zinc-50 border border-zinc-200 p-4 rounded-2xl outline-none focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10 transition-all duration-300 font-medium text-zinc-900 tracking-wider" onChange={e => { const numbersOnly = e.target.value.replace(/\D/g, '').slice(0, 10); setAuthForm({...authForm, phone: numbersOnly}); }} />
+              <input type="password" placeholder="Password" required className="w-full bg-zinc-50 border border-zinc-200 p-4 rounded-2xl outline-none focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10 transition-all duration-300 font-medium text-zinc-900 tracking-wider" onChange={e => setAuthForm({...authForm, password: e.target.value})} />
+              {authMode === 'signup' && <p className="text-[10px] text-zinc-400 font-medium px-2 mt-1">Min 6 characters, combining letters & numbers.</p>}
+              <button type="submit" className="w-full bg-gradient-to-r from-orange-600 to-orange-500 text-white py-4 rounded-2xl font-bold text-lg hover:shadow-[0_8px_30px_-8px_rgba(249,115,22,0.4)] active:scale-95 transition-all duration-300 mt-4">
+                {authMode === 'login' ? 'Login Securely' : 'Create My Account'}
+              </button>
+            </form>
+            <button onClick={() => setAuthMode(authMode==='login'?'signup':'login')} className="w-full text-center mt-8 text-zinc-500 text-sm font-medium hover:text-zinc-900 transition-colors duration-300">
+              {authMode==='login' ? 'Don\'t have an account? ' : 'Already have an account? '}<span className="text-orange-600 font-bold underline decoration-orange-200 underline-offset-4">Click Here</span>
+            </button>
           </div>
         </div>
       )}
